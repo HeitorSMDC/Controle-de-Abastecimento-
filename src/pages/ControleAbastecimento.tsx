@@ -1,9 +1,11 @@
+// src/pages/ControleAbastecimento.tsx
+
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@/components/ui/label"; // Será usado pelo FormLabel
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -11,6 +13,33 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+
+// NOVO: Importações para formulário e validação
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { abastecimentoSchema, AbastecimentoFormData } from "@/lib/validations";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+
+// NOVO: Importações para o AlertDialog
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+
 
 interface Abastecimento {
   id: string;
@@ -43,23 +72,30 @@ export default function ControleAbastecimento() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedWeek, setSelectedWeek] = useState<number | "all">("all");
-  const [formData, setFormData] = useState({
-    data: new Date().toISOString().split("T")[0],
-    veiculo: "",
-    placa: "",
-    cartao: "",
-    motorista: "",
-    matricula: "",
-    quantidade_litros: "",
-    valor_reais: "",
-  });
+  // O 'formData' useState foi removido
   const { userRole } = useAuth();
+  
+  // NOVO: Configuração do React Hook Form
+  const form = useForm<AbastecimentoFormData>({
+    resolver: zodResolver(abastecimentoSchema),
+    defaultValues: {
+      data: new Date().toISOString().split("T")[0],
+      veiculo: "",
+      placa: "",
+      cartao: "",
+      motorista: "",
+      matricula: "",
+      quantidade_litros: 0,
+      valor_reais: 0,
+    },
+  });
 
   useEffect(() => {
     fetchAbastecimentos();
   }, [selectedMonth, selectedYear]);
 
   const fetchAbastecimentos = async () => {
+    // ... (lógica de fetch existente) ...
     try {
       const { data, error } = await supabase
         .from("controle_abastecimento")
@@ -77,18 +113,17 @@ export default function ControleAbastecimento() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // NOVO: Função de submit do react-hook-form
+  const onSubmit = async (data: AbastecimentoFormData) => {
     try {
-      const date = new Date(formData.data);
+      // Mantém a lógica de cálculo de data/semana
+      const date = new Date(data.data);
       const semana = getWeekNumber(date);
       const mes = date.getMonth() + 1;
       const ano = date.getFullYear();
 
       const dataToSave = {
-        ...formData,
-        quantidade_litros: parseFloat(formData.quantidade_litros),
-        valor_reais: parseFloat(formData.valor_reais),
+        ...data,
         semana,
         mes,
         ano,
@@ -117,36 +152,34 @@ export default function ControleAbastecimento() {
   };
 
   const resetForm = () => {
-    setFormData({
+    // NOVO: Usa o form.reset()
+    form.reset({
       data: new Date().toISOString().split("T")[0],
       veiculo: "",
       placa: "",
       cartao: "",
       motorista: "",
       matricula: "",
-      quantidade_litros: "",
-      valor_reais: "",
+      quantidade_litros: 0,
+      valor_reais: 0,
     });
     setEditingId(null);
   };
 
   const handleEdit = (abastecimento: Abastecimento) => {
-    setFormData({
-      data: abastecimento.data,
-      veiculo: abastecimento.veiculo,
-      placa: abastecimento.placa,
+    // NOVO: Usa o form.reset() para preencher o formulário
+    form.reset({
+      ...abastecimento,
       cartao: abastecimento.cartao || "",
-      motorista: abastecimento.motorista,
-      matricula: abastecimento.matricula,
-      quantidade_litros: abastecimento.quantidade_litros.toString(),
-      valor_reais: abastecimento.valor_reais.toString(),
+      // Os tipos number/string são compatíveis
     });
     setEditingId(abastecimento.id);
     setIsDialogOpen(true);
   };
 
+  // NOVO: Função handleDelete sem o 'confirm'
   const handleDelete = async (id: string) => {
-    if (!confirm("Tem certeza que deseja excluir este registro?")) return;
+    // if (!confirm(...)) return; // LINHA REMOVIDA
     
     try {
       const { error } = await supabase
@@ -163,6 +196,7 @@ export default function ControleAbastecimento() {
 
   const canDelete = userRole === "admin" || userRole === "coordenador";
 
+  // ... (lógica de useMemo para filteredAbastecimentos, weeklyTotals, monthTotal) ...
   const filteredAbastecimentos = useMemo(() => {
     if (selectedWeek === "all") return abastecimentos;
     return abastecimentos.filter(a => a.semana === selectedWeek);
@@ -185,6 +219,7 @@ export default function ControleAbastecimento() {
     };
   }, [abastecimentos]);
 
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -201,91 +236,148 @@ export default function ControleAbastecimento() {
               <DialogHeader>
                 <DialogTitle>{editingId ? "Editar" : "Novo"} Registro de Abastecimento</DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="data">Data</Label>
-                    <Input
-                      id="data"
-                      type="date"
-                      value={formData.data}
-                      onChange={(e) => setFormData({ ...formData, data: e.target.value })}
-                      required
+              
+              {/* NOVO: FormProvider */}
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    
+                    <FormField
+                      control={form.control}
+                      name="data"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Data</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="veiculo">Veículo</Label>
-                    <Input
-                      id="veiculo"
-                      value={formData.veiculo}
-                      onChange={(e) => setFormData({ ...formData, veiculo: e.target.value })}
-                      required
+                    
+                    <FormField
+                      control={form.control}
+                      name="veiculo"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Veículo</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="placa">Placa</Label>
-                    <Input
-                      id="placa"
-                      value={formData.placa}
-                      onChange={(e) => setFormData({ ...formData, placa: e.target.value.toUpperCase() })}
-                      required
+
+                    <FormField
+                      control={form.control}
+                      name="placa"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Placa</FormLabel>
+                          <FormControl>
+                            <Input {...field} onChange={e => field.onChange(e.target.value.toUpperCase())} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="cartao">Cartão</Label>
-                    <Input
-                      id="cartao"
-                      value={formData.cartao}
-                      onChange={(e) => setFormData({ ...formData, cartao: e.target.value })}
+                    
+                    <FormField
+                      control={form.control}
+                      name="cartao"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Cartão</FormLabel>
+                          <FormControl>
+                            <Input {...field} value={field.value || ''} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="motorista">Motorista</Label>
-                    <Input
-                      id="motorista"
-                      value={formData.motorista}
-                      onChange={(e) => setFormData({ ...formData, motorista: e.target.value })}
-                      required
+
+                    <FormField
+                      control={form.control}
+                      name="motorista"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Motorista</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="matricula">Matrícula</Label>
-                    <Input
-                      id="matricula"
-                      value={formData.matricula}
-                      onChange={(e) => setFormData({ ...formData, matricula: e.target.value })}
-                      required
+                    
+                    <FormField
+                      control={form.control}
+                      name="matricula"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Matrícula</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="quantidade_litros">Quantidade (L)</Label>
-                    <Input
-                      id="quantidade_litros"
-                      type="number"
-                      step="0.01"
-                      value={formData.quantidade_litros}
-                      onChange={(e) => setFormData({ ...formData, quantidade_litros: e.target.value })}
-                      required
+
+                    <FormField
+                      control={form.control}
+                      name="quantidade_litros"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Quantidade (L)</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="number" 
+                              step="0.01" 
+                              {...field}
+                              value={field.value || ''}
+                              onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="valor_reais">Valor (R$)</Label>
-                    <Input
-                      id="valor_reais"
-                      type="number"
-                      step="0.01"
-                      value={formData.valor_reais}
-                      onChange={(e) => setFormData({ ...formData, valor_reais: e.target.value })}
-                      required
+
+                    <FormField
+                      control={form.control}
+                      name="valor_reais"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Valor (R$)</FormLabel>
+                          <FormControl>
+                             <Input 
+                              type="number" 
+                              step="0.01" 
+                              {...field}
+                              value={field.value || ''}
+                              onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
+
                   </div>
-                </div>
-                <Button type="submit" className="w-full">Salvar</Button>
-              </form>
+                  <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+                    {form.formState.isSubmitting ? "Salvando..." : "Salvar"}
+                  </Button>
+                </form>
+              </Form>
+
             </DialogContent>
           </Dialog>
         </div>
 
+        {/* ... (Cards de Filtro e Resumo - sem alterações) ... */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card>
             <CardHeader>
@@ -388,11 +480,14 @@ export default function ControleAbastecimento() {
           </Card>
         </div>
 
+
         <Card>
           <CardContent className="p-0">
             {loading ? (
+              // ... (código de loading) ...
               <div className="p-8 text-center">Carregando...</div>
             ) : filteredAbastecimentos.length === 0 ? (
+              // ... (código de estado vazio) ...
               <div className="p-8 text-center text-muted-foreground">
                 Nenhum registro encontrado
               </div>
@@ -401,6 +496,7 @@ export default function ControleAbastecimento() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      {/* ... (TableHeads) ... */}
                       <TableHead>Data</TableHead>
                       <TableHead>Semana</TableHead>
                       <TableHead>Veículo</TableHead>
@@ -416,6 +512,7 @@ export default function ControleAbastecimento() {
                   <TableBody>
                     {filteredAbastecimentos.map((abastecimento) => (
                       <TableRow key={abastecimento.id}>
+                        {/* ... (TableCells) ... */}
                         <TableCell>{new Date(abastecimento.data).toLocaleDateString("pt-BR")}</TableCell>
                         <TableCell>Sem. {abastecimento.semana}</TableCell>
                         <TableCell className="font-medium">{abastecimento.veiculo}</TableCell>
@@ -434,14 +531,34 @@ export default function ControleAbastecimento() {
                             >
                               <Pencil className="h-4 w-4" />
                             </Button>
+                            
+                            {/* NOVO: AlertDialog para confirmação de exclusão */}
                             {canDelete && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDelete(abastecimento.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="icon">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Tem a certeza?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Esta ação não pode ser revertida. Isto irá apagar
+                                      permanentemente o registo de abastecimento do veículo
+                                      <strong className="px-1">{abastecimento.veiculo}</strong>
+                                      (Placa: {abastecimento.placa}) no valor de
+                                      <strong className="px-1">R$ {abastecimento.valor_reais.toFixed(2)}</strong>.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDelete(abastecimento.id)}>
+                                      Continuar
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
                             )}
                           </div>
                         </TableCell>
