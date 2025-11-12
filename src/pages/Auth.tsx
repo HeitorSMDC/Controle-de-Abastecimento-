@@ -1,13 +1,18 @@
+// src/pages/Auth.tsx
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input } from "@/components/ui/input"; // Ainda é necessário para o email
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import logo from "@/assets/defesa-civil-logo.png";
+
+// NOVO: Importar o componente de senha
+import { PasswordField } from "@/components/PasswordField";
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -114,15 +119,18 @@ export default function Auth() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Senha</Label>
-              <Input
+              
+              {/* NOVO: Substituímos o <Input> pelo <PasswordField> */}
+              <PasswordField
                 id="password"
-                type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(value) => setPassword(value)}
                 required
                 placeholder="••••••••"
-                minLength={6}
               />
+              
+              {/* O Input antigo foi removido */}
+
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Processando..." : isLogin ? "Entrar" : "Criar Conta"}
