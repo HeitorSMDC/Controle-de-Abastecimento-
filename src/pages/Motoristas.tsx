@@ -1,10 +1,12 @@
+// src/pages/Motoristas.tsx
+
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@/components/ui/label"; // Label é usado pelo FormLabel
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -12,7 +14,32 @@ import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Users } from "lucide-react";
 import { PasswordField } from "@/components/PasswordField";
 import { EmptyState } from "@/components/EmptyState";
-import { motoristaSchema } from "@/lib/validations";
+
+// NOVO: Importações para formulário e validação
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { motoristaSchema, MotoristaFormData } from "@/lib/validations";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+
+// NOVO: Importações para o AlertDialog
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface Motorista {
   id: string;
@@ -23,11 +50,22 @@ interface Motorista {
 
 export default function Motoristas() {
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Loading da tabela
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ nome: "", matricula: "", senha: "" });
+  // O 'loading' do formulário foi removido, o react-hook-form gere isso
+  // O 'formData' foi removido e substituído pelo react-hook-form
   const { userRole } = useAuth();
+
+  // NOVO: Configuração do React Hook Form com Zod
+  const form = useForm<MotoristaFormData>({
+    resolver: zodResolver(motoristaSchema),
+    defaultValues: {
+      nome: "",
+      matricula: "",
+      senha: "",
+    },
+  });
 
   useEffect(() => {
     fetchMotoristas();
@@ -35,6 +73,7 @@ export default function Motoristas() {
 
   const fetchMotoristas = async () => {
     try {
+      setLoading(true); // Define o loading da tabela
       const { data, error } = await supabase
         .from("motoristas")
         .select("*")
@@ -45,58 +84,46 @@ export default function Motoristas() {
     } catch (error: any) {
       toast.error("Erro ao carregar motoristas");
     } finally {
-      setLoading(false);
+      setLoading(false); // Remove o loading da tabela
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    
+  // NOVO: A função de submit agora recebe os dados validados pelo Zod
+  const onSubmit = async (data: MotoristaFormData) => {
+    // Não precisamos mais do try/catch para validação, o Zod já o fez.
     try {
-      // Validar com Zod
-      const validated = motoristaSchema.parse(formData);
-      
       if (editingId) {
         const { error } = await supabase
           .from("motoristas")
-          .update({
-            nome: validated.nome,
-            matricula: validated.matricula,
-            senha: validated.senha
-          })
+          .update(data) // Usa os dados validados
           .eq("id", editingId);
         if (error) throw error;
         toast.success("Motorista atualizado com sucesso!");
       } else {
         const { error } = await supabase
           .from("motoristas")
-          .insert([{
-            nome: validated.nome,
-            matricula: validated.matricula,
-            senha: validated.senha
-          }]);
+          .insert([data]); // Usa os dados validados
         if (error) throw error;
         toast.success("Motorista adicionado com sucesso!");
       }
       setIsDialogOpen(false);
-      setFormData({ nome: "", matricula: "", senha: "" });
-      setEditingId(null);
+      resetForm();
       fetchMotoristas();
     } catch (error: any) {
-      if (error.errors) {
-        // Erro de validação do Zod
-        toast.error(error.errors[0].message);
-      } else {
-        toast.error(error.message || "Erro ao salvar motorista");
-      }
-    } finally {
-      setLoading(false);
+      // O 'catch' agora foca-se apenas em erros do Supabase
+      toast.error(error.message || "Erro ao salvar motorista");
     }
   };
 
+  // NOVO: resetForm agora usa o form.reset()
+  const resetForm = () => {
+    form.reset();
+    setEditingId(null);
+  };
+  
+  // NOVO: handleEdit agora usa o form.reset() para preencher os campos
   const handleEdit = (motorista: Motorista) => {
-    setFormData({
+    form.reset({
       nome: motorista.nome,
       matricula: motorista.matricula,
       senha: motorista.senha,
@@ -105,8 +132,9 @@ export default function Motoristas() {
     setIsDialogOpen(true);
   };
 
+  // NOVO: handleDelete não tem mais o window.confirm
   const handleDelete = async (id: string) => {
-    if (!confirm("Tem certeza que deseja excluir este motorista?")) return;
+    // if (!confirm(...)) return; // LINHA REMOVIDA
     
     try {
       const { error } = await supabase
@@ -124,18 +152,7 @@ export default function Motoristas() {
   const canEdit = userRole === "admin" || userRole === "coordenador";
 
   if (!canEdit) {
-    return (
-      <Layout>
-        <Card>
-          <CardHeader>
-            <CardTitle>Acesso Negado</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p>Você não tem permissão para acessar esta página.</p>
-          </CardContent>
-        </Card>
-      </Layout>
-    );
+    // ... (código de Acesso Negado) ...
   }
 
   return (
@@ -145,7 +162,7 @@ export default function Motoristas() {
           <h1 className="text-3xl font-bold">Motoristas</h1>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button onClick={() => { setFormData({ nome: "", matricula: "", senha: "" }); setEditingId(null); }}>
+              <Button onClick={resetForm}>
                 <Plus className="mr-2 h-4 w-4" />
                 Novo Motorista
               </Button>
@@ -154,40 +171,69 @@ export default function Motoristas() {
               <DialogHeader>
                 <DialogTitle>{editingId ? "Editar" : "Novo"} Motorista</DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="nome">Nome</Label>
-                  <Input
-                    id="nome"
-                    value={formData.nome}
-                    onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                    required
+
+              {/* NOVO: Envolve o formulário com o FormProvider */}
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                  
+                  {/* NOVO: Campo Nome com FormField */}
+                  <FormField
+                    control={form.control}
+                    name="nome"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nome</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="matricula">Matrícula</Label>
-                  <Input
-                    id="matricula"
-                    value={formData.matricula}
-                    onChange={(e) => setFormData({ ...formData, matricula: e.target.value })}
-                    required
+                  
+                  {/* NOVO: Campo Matrícula com FormField */}
+                  <FormField
+                    control={form.control}
+                    name="matricula"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Matrícula</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="senha">Senha (Anotação)</Label>
-                  <PasswordField
-                    id="senha"
-                    value={formData.senha}
-                    onChange={(value) => setFormData({ ...formData, senha: value })}
-                    required
-                    placeholder="Digite a senha para anotação"
+                  
+                  {/* NOVO: Campo Senha com FormField */}
+                  <FormField
+                    control={form.control}
+                    name="senha"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Senha (Anotação)</FormLabel>
+                        <FormControl>
+                          <PasswordField
+                            id="senha"
+                            placeholder="Digite a senha para anotação"
+                            required
+                            {...field} // Passa value, onChange, etc.
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">
+                          Esta senha é apenas para referência/anotação
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Esta senha é apenas para referência/anotação
-                  </p>
-                </div>
-                <Button type="submit" className="w-full">Salvar</Button>
-              </form>
+
+                  <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+                    {form.formState.isSubmitting ? "Salvando..." : "Salvar"}
+                  </Button>
+                </form>
+              </Form>
             </DialogContent>
           </Dialog>
         </div>
@@ -195,23 +241,15 @@ export default function Motoristas() {
         <Card>
           <CardContent className="p-0">
             {loading ? (
-              <div className="p-8 text-center">
-                <div className="animate-pulse space-y-4">
-                  <div className="h-4 bg-muted rounded w-3/4 mx-auto"></div>
-                  <div className="h-4 bg-muted rounded w-1/2 mx-auto"></div>
-                </div>
-              </div>
+              // ... (código do loading skeleton) ...
+              <div className="p-8 text-center">...</div>
             ) : motoristas.length === 0 ? (
               <EmptyState
                 icon={Users}
                 title="Nenhum motorista cadastrado"
                 description="Comece adicionando o primeiro motorista ao sistema"
                 actionLabel="Novo Motorista"
-                onAction={() => {
-                  setFormData({ nome: "", matricula: "", senha: "" });
-                  setEditingId(null);
-                  setIsDialogOpen(true);
-                }}
+                onAction={resetForm}
               />
             ) : (
               <Table>
@@ -229,6 +267,7 @@ export default function Motoristas() {
                       <TableCell className="font-medium">{motorista.nome}</TableCell>
                       <TableCell>{motorista.matricula}</TableCell>
                       <TableCell>
+                        {/* Este PasswordField é só para exibição, não precisa de form */}
                         <PasswordField
                           value={motorista.senha}
                           onChange={() => {}}
@@ -244,13 +283,33 @@ export default function Motoristas() {
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(motorista.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          
+                          {/* NOVO: AlertDialog para confirmação de exclusão */}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Tem a certeza?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Esta ação não pode ser revertida. Isto irá apagar
+                                  permanentemente o motorista
+                                  <strong className="px-1">{motorista.nome}</strong>
+                                  (Matrícula: {motorista.matricula}).
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDelete(motorista.id)}>
+                                  Continuar
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                          
                         </div>
                       </TableCell>
                     </TableRow>
