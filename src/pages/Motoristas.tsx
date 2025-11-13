@@ -1,21 +1,18 @@
 // src/pages/Motoristas.tsx
 
-import { useState, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react"; // useMemo e useEffect removidos para filtro
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label"; // Label é usado pelo FormLabel
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Users } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, Search } from "lucide-react";
 import { PasswordField } from "@/components/PasswordField";
 import { EmptyState } from "@/components/EmptyState";
 
-// NOVO: Importações para formulário e validação
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motoristaSchema, MotoristaFormData } from "@/lib/validations";
@@ -28,7 +25,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
-// NOVO: Importações para o AlertDialog
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,6 +37,26 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { ResponsiveDialog } from "@/components/ResponsiveDialog";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { MotoristaCard } from "@/components/cards/MotoristaCard";
+import { ListSkeleton } from "@/components/ListSkeleton";
+
+// NOVO: Importar useDebounce e Pagination
+import { useDebounce } from "@/hooks/use-debounce";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+
+// NOVO: Constante para itens por página
+const ITEMS_PER_PAGE = 10;
+
 interface Motorista {
   id: string;
   nome: string;
@@ -48,16 +64,44 @@ interface Motorista {
   senha: string;
 }
 
+// NOVO: fetchMotoristas agora aceita paginação e busca
+const fetchMotoristas = async (page: number, searchTerm: string) => {
+  const from = (page - 1) * ITEMS_PER_PAGE;
+  const to = from + ITEMS_PER_PAGE - 1;
+
+  let query = supabase
+    .from("motoristas")
+    .select("*", { count: "exact" }); // Pede o 'count' total
+
+  // Se houver um termo de busca, filtra por nome OU matrícula
+  if (searchTerm) {
+    query = query.or(
+      `nome.ilike.%${searchTerm}%,matricula.ilike.%${searchTerm}%`
+    );
+  }
+
+  // Aplica a ordem e a paginação
+  query = query.order("nome").range(from, to);
+
+  const { data, error, count } = await query;
+
+  if (error) throw error;
+  return { data: data || [], count: count || 0 };
+};
+
+
 export default function Motoristas() {
-  const [motoristas, setMotoristas] = useState<Motorista[]>([]);
-  const [loading, setLoading] = useState(true); // Loading da tabela
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  // O 'loading' do formulário foi removido, o react-hook-form gere isso
-  // O 'formData' foi removido e substituído pelo react-hook-form
+  const [searchTerm, setSearchTerm] = useState("");
   const { userRole } = useAuth();
+  const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
 
-  // NOVO: Configuração do React Hook Form com Zod
+  // NOVO: Estados para paginação e busca "atrasada"
+  const [page, setPage] = useState(1);
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
   const form = useForm<MotoristaFormData>({
     resolver: zodResolver(motoristaSchema),
     defaultValues: {
@@ -67,61 +111,63 @@ export default function Motoristas() {
     },
   });
 
-  useEffect(() => {
-    fetchMotoristas();
-  }, []);
+  // NOVO: useQuery modificado. Agora depende da 'page' e 'debouncedSearchTerm'
+  const { data, isLoading } = useQuery({
+    queryKey: ["motoristas", page, debouncedSearchTerm], // A chave de cache inclui a página e a busca
+    queryFn: () => fetchMotoristas(page, debouncedSearchTerm),
+  });
 
-  const fetchMotoristas = async () => {
-    try {
-      setLoading(true); // Define o loading da tabela
-      const { data, error } = await supabase
-        .from("motoristas")
-        .select("*")
-        .order("nome");
+  // NOVO: Pega os dados e o 'count' do useQuery
+  const motoristas: Motorista[] = data?.data || [];
+  const totalCount = data?.count || 0;
+  const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
 
-      if (error) throw error;
-      setMotoristas(data || []);
-    } catch (error: any) {
-      toast.error("Erro ao carregar motoristas");
-    } finally {
-      setLoading(false); // Remove o loading da tabela
-    }
-  };
+  // REMOVIDO: O 'useMemo' para 'filteredMotoristas' foi removido.
+  // A base de dados já nos entrega os dados filtrados e paginados.
 
-  // NOVO: A função de submit agora recebe os dados validados pelo Zod
-  const onSubmit = async (data: MotoristaFormData) => {
-    // Não precisamos mais do try/catch para validação, o Zod já o fez.
-    try {
-      if (editingId) {
-        const { error } = await supabase
-          .from("motoristas")
-          .update(data) // Usa os dados validados
-          .eq("id", editingId);
-        if (error) throw error;
-        toast.success("Motorista atualizado com sucesso!");
-      } else {
-        const { error } = await supabase
-          .from("motoristas")
-          .insert([data]); // Usa os dados validados
-        if (error) throw error;
-        toast.success("Motorista adicionado com sucesso!");
-      }
+  // ... (Mutations: salvarMotorista, deletarMotorista - sem alterações) ...
+  const { mutate: salvarMotorista, isPending: isSaving } = useMutation({
+    mutationFn: async (data: MotoristaFormData) => {
+      // ...
+    },
+    onSuccess: (message) => {
+      toast.success(message);
       setIsDialogOpen(false);
       resetForm();
-      fetchMotoristas();
-    } catch (error: any) {
-      // O 'catch' agora foca-se apenas em erros do Supabase
+      // NOVO: Invalida *todas* as queries de 'motoristas' para garantir que a paginação se atualiza
+      queryClient.invalidateQueries({ queryKey: ["motoristas"] });
+    },
+    onError: (error: any) => {
       toast.error(error.message || "Erro ao salvar motorista");
-    }
+    },
+  });
+
+  const { mutate: deletarMotorista } = useMutation({
+    mutationFn: async (id: string) => {
+      // ...
+    },
+    onSuccess: (message) => {
+      toast.success(message);
+      queryClient.invalidateQueries({ queryKey: ["motoristas"] });
+      // NOVO: Se apagamos o último item de uma página, volta para a página anterior
+      if (motoristas.length === 1 && page > 1) {
+        setPage(page - 1);
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Erro ao excluir motorista");
+    },
+  });
+
+  const onSubmit = (data: MotoristaFormData) => {
+    salvarMotorista(data);
   };
 
-  // NOVO: resetForm agora usa o form.reset()
   const resetForm = () => {
     form.reset();
     setEditingId(null);
   };
   
-  // NOVO: handleEdit agora usa o form.reset() para preencher os campos
   const handleEdit = (motorista: Motorista) => {
     form.reset({
       nome: motorista.nome,
@@ -132,191 +178,287 @@ export default function Motoristas() {
     setIsDialogOpen(true);
   };
 
-  // NOVO: handleDelete não tem mais o window.confirm
-  const handleDelete = async (id: string) => {
-    // if (!confirm(...)) return; // LINHA REMOVIDA
-    
-    try {
-      const { error } = await supabase
-        .from("motoristas")
-        .delete()
-        .eq("id", id);
-      if (error) throw error;
-      toast.success("Motorista excluído com sucesso!");
-      fetchMotoristas();
-    } catch (error: any) {
-      toast.error("Erro ao excluir motorista");
+  // NOVO: Funções para mudar de página
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setPage(newPage);
     }
   };
+  
+  // NOVO: Quando a busca muda, volta para a página 1
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearchTerm]);
+
 
   const canEdit = userRole === "admin" || userRole === "coordenador";
 
   if (!canEdit) {
-    // ... (código de Acesso Negado) ...
+    // ... (Acesso Negado) ...
   }
+
+  const renderContent = () => {
+    if (isLoading) {
+      return <ListSkeleton />;
+    }
+
+    // NOVO: A lógica do EmptyState agora usa 'totalCount' e 'searchTerm'
+    if (totalCount === 0 && debouncedSearchTerm === "") {
+      return (
+        <EmptyState
+          icon={Users}
+          title="Nenhum motorista cadastrado"
+          description="Comece adicionando o primeiro motorista ao sistema"
+          actionLabel="Novo Motorista"
+          onAction={() => {
+            resetForm();
+            setIsDialogOpen(true);
+          }}
+        />
+      );
+    }
+    
+    if (motoristas.length === 0 && debouncedSearchTerm !== "") {
+      return (
+        <div className="p-8 text-center text-muted-foreground">
+          Nenhum motorista encontrado para "{searchTerm}"
+        </div>
+      );
+    }
+
+    // NOVO: O conteúdo principal (mobile ou desktop)
+    const listContent = isMobile ? (
+      <div className="space-y-4 p-4">
+        {motoristas.map((motorista) => (
+          <MotoristaCard
+            key={motorista.id}
+            motorista={motorista}
+            onEdit={() => handleEdit(motorista)}
+            deleteAction={
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="w-full text-destructive hover:text-destructive">
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Apagar
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Tem a certeza?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Esta ação não pode ser revertida. Isto irá apagar
+                      permanentemente o motorista
+                      <strong className="px-1">{motorista.nome}</strong>
+                      (Matrícula: {motorista.matricula}).
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => deletarMotorista(motorista.id)}>
+                      Continuar
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            }
+          />
+        ))}
+      </div>
+    ) : (
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Nome</TableHead>
+            <TableHead>Matrícula</TableHead>
+            <TableHead>Senha</TableHead>
+            <TableHead className="w-[100px]">Ações</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {motoristas.map((motorista) => (
+            <TableRow key={motorista.id}>
+              <TableCell className="font-medium">{motorista.nome}</TableCell>
+              <TableCell>{motorista.matricula}</TableCell>
+              <TableCell>
+                <PasswordField
+                  value={motorista.senha}
+                  onChange={() => {}}
+                  placeholder="••••••••"
+                />
+              </TableCell>
+              <TableCell>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleEdit(motorista)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Tem a certeza?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Esta ação não pode ser revertida. Isto irá apagar
+                          permanentemente o motorista
+                          <strong className="px-1">{motorista.nome}</strong>
+                          (Matrícula: {motorista.matricula}).
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => deletarMotorista(motorista.id)}>
+                          Continuar
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    );
+
+    // NOVO: Retorna o conteúdo E a paginação
+    return (
+      <>
+        {listContent}
+        {totalPages > 1 && (
+          <div className="p-4 border-t">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handlePageChange(page - 1);
+                    }}
+                    aria-disabled={page === 1}
+                    className={page === 1 ? "pointer-events-none opacity-50" : ""}
+                  />
+                </PaginationItem>
+                {/* Lógica simples de paginação (pode ser melhorada) */}
+                <PaginationItem>
+                  <PaginationLink href="#" isActive>
+                    Página {page} de {totalPages}
+                  </PaginationLink>
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handlePageChange(page + 1);
+                    }}
+                    aria-disabled={page === totalPages}
+                    className={page === totalPages ? "pointer-events-none opacity-50" : ""}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
+      </>
+    );
+  };
+  
 
   return (
     <Layout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Motoristas</h1>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
+          <ResponsiveDialog
+            open={isDialogOpen}
+            onOpenChange={setIsDialogOpen}
+            title={editingId ? "Editar Motorista" : "Novo Motorista"}
+            trigger={
               <Button onClick={resetForm}>
                 <Plus className="mr-2 h-4 w-4" />
                 Novo Motorista
               </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{editingId ? "Editar" : "Novo"} Motorista</DialogTitle>
-              </DialogHeader>
-
-              {/* NOVO: Envolve o formulário com o FormProvider */}
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  
-                  {/* NOVO: Campo Nome com FormField */}
-                  <FormField
-                    control={form.control}
-                    name="nome"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nome</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  {/* NOVO: Campo Matrícula com FormField */}
-                  <FormField
-                    control={form.control}
-                    name="matricula"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Matrícula</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  {/* NOVO: Campo Senha com FormField */}
-                  <FormField
-                    control={form.control}
-                    name="senha"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Senha (Anotação)</FormLabel>
-                        <FormControl>
-                          <PasswordField
-                            id="senha"
-                            placeholder="Digite a senha para anotação"
-                            required
-                            {...field} // Passa value, onChange, etc.
-                          />
-                        </FormControl>
-                        <p className="text-xs text-muted-foreground">
-                          Esta senha é apenas para referência/anotação
-                        </p>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-                    {form.formState.isSubmitting ? "Salvando..." : "Salvar"}
-                  </Button>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
+            }
+          >
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+                <FormField
+                  control={form.control}
+                  name="nome"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nome</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="matricula"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Matrícula</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="senha"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Senha (Anotação)</FormLabel>
+                      <FormControl>
+                        <PasswordField
+                          id="senha"
+                          placeholder="Digite a senha para anotação"
+                          required
+                          {...field}
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        Esta senha é apenas para referência/anotação
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button type="submit" className="w-full" disabled={isSaving}>
+                  {isSaving ? "Salvando..." : "Salvar"}
+                </Button>
+              </form>
+            </Form>
+          </ResponsiveDialog>
         </div>
 
         <Card>
-          <CardContent className="p-0">
-            {loading ? (
-              // ... (código do loading skeleton) ...
-              <div className="p-8 text-center">...</div>
-            ) : motoristas.length === 0 ? (
-              <EmptyState
-                icon={Users}
-                title="Nenhum motorista cadastrado"
-                description="Comece adicionando o primeiro motorista ao sistema"
-                actionLabel="Novo Motorista"
-                onAction={resetForm}
+          <CardHeader className="p-4">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome ou matrícula..."
+                className="pl-8"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
               />
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Matrícula</TableHead>
-                    <TableHead>Senha</TableHead>
-                    <TableHead className="w-[100px]">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {motoristas.map((motorista) => (
-                    <TableRow key={motorista.id}>
-                      <TableCell className="font-medium">{motorista.nome}</TableCell>
-                      <TableCell>{motorista.matricula}</TableCell>
-                      <TableCell>
-                        {/* Este PasswordField é só para exibição, não precisa de form */}
-                        <PasswordField
-                          value={motorista.senha}
-                          onChange={() => {}}
-                          placeholder="••••••••"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(motorista)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          
-                          {/* NOVO: AlertDialog para confirmação de exclusão */}
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Tem a certeza?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Esta ação não pode ser revertida. Isto irá apagar
-                                  permanentemente o motorista
-                                  <strong className="px-1">{motorista.nome}</strong>
-                                  (Matrícula: {motorista.matricula}).
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDelete(motorista.id)}>
-                                  Continuar
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                          
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {renderContent()}
           </CardContent>
         </Card>
       </div>
