@@ -3,9 +3,10 @@
 import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Pencil, Gauge } from "lucide-react";
+import { Pencil, Gauge, TrendingUp, DollarSign } from "lucide-react"; // Novos ícones
+import { Separator } from "@/components/ui/separator"; // Novo
 
-// Interface para os dados de Abastecimento
+// Interface atualizada
 interface Abastecimento {
   id: string;
   data: string;
@@ -15,6 +16,9 @@ interface Abastecimento {
   quantidade_litros: number;
   valor_reais: number;
   semana: number;
+  odometro: number | null;
+  km_percorridos: number | null;
+  media_km_l: number | null;
 }
 
 interface AbastecimentoCardProps {
@@ -28,6 +32,11 @@ export function AbastecimentoCard({
   onEdit,
   deleteAction,
 }: AbastecimentoCardProps) {
+  
+  const valorUnitario = abastecimento.quantidade_litros > 0
+    ? (abastecimento.valor_reais / abastecimento.quantidade_litros).toFixed(3)
+    : "0.000";
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -37,7 +46,7 @@ export function AbastecimentoCard({
         <Gauge className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Informações de Custo e Litros */}
+        {/* Bloco de Custo */}
         <div className="flex justify-between items-center p-3 bg-muted rounded-lg">
           <div>
             <p className="text-xs font-medium text-muted-foreground">Valor Gasto</p>
@@ -52,6 +61,26 @@ export function AbastecimentoCard({
             </p>
           </div>
         </div>
+        
+        {/* Bloco de Odômetro e Média */}
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">Odômetro</p>
+            <p className="text-sm font-semibold">{abastecimento.odometro || "N/A"} km</p>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">Distância</p>
+            <p className="text-sm font-semibold">{abastecimento.km_percorridos || "N/A"} km</p>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">Média</p>
+            <p className="text-sm font-semibold text-green-600">
+              {abastecimento.media_km_l ? `${abastecimento.media_km_l.toFixed(2)} km/L` : "N/A"}
+            </p>
+          </div>
+        </div>
+
+        <Separator />
 
         {/* Detalhes */}
         <div className="space-y-2">
@@ -60,11 +89,15 @@ export function AbastecimentoCard({
             <p className="text-sm">{abastecimento.motorista}</p>
           </div>
           <div>
-            <p className="text-xs font-medium text-muted-foreground">Data e Semana</p>
+            <p className="text-xs font-medium text-muted-foreground">Data (Semana)</p>
             <p className="text-sm">
               {new Date(abastecimento.data).toLocaleDateString("pt-BR")} (Sem.{" "}
               {abastecimento.semana})
             </p>
+          </div>
+           <div>
+            <p className="text-xs font-medium text-muted-foreground">Valor por Litro</p>
+            <p className="text-sm">R$ {valorUnitario}</p>
           </div>
         </div>
 
