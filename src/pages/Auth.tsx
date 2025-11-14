@@ -43,6 +43,8 @@ export default function Auth() {
         toast.success("Login realizado com sucesso!");
         navigate("/");
       } else {
+        // O Trigger no Supabase (handle_new_user) vai criar o perfil e a role.
+        // Só precisamos de passar o 'nome' nos metadados.
         const redirectUrl = `${window.location.origin}/`;
         const { data, error } = await supabase.auth.signUp({
           email,
@@ -50,26 +52,15 @@ export default function Auth() {
           options: {
             emailRedirectTo: redirectUrl,
             data: {
-              nome,
+              nome, // O Trigger vai ler este 'nome'
             },
           },
         });
         
         if (error) throw error;
         
-        if (data.user) {
-          await supabase.from("profiles").insert({
-            id: data.user.id,
-            user_id: data.user.id,
-            nome,
-            email,
-          });
-
-          await supabase.from("user_roles").insert({
-            user_id: data.user.id,
-            role: "usuario",
-          });
-        }
+        // As inserções manuais em 'profiles' e 'user_roles' foram removidas
+        // pois o Gatilho SQL no Supabase trata disso automaticamente.
         
         toast.success("Conta criada com sucesso!");
         navigate("/");
@@ -120,7 +111,7 @@ export default function Auth() {
             <div className="space-y-2">
               <Label htmlFor="password">Senha</Label>
               
-              {/* NOVO: Substituímos o <Input> pelo <PasswordField> */}
+              {/* Substituímos o <Input> pelo <PasswordField> */}
               <PasswordField
                 id="password"
                 value={password}
@@ -129,8 +120,6 @@ export default function Auth() {
                 placeholder="••••••••"
               />
               
-              {/* O Input antigo foi removido */}
-
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Processando..." : isLogin ? "Entrar" : "Criar Conta"}
