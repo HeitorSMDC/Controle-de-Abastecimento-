@@ -9,6 +9,8 @@ import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Pie, PieChart, Cell } from "recharts";
 import { ListSkeleton } from "@/components/ListSkeleton"; // Reutilizamos o skeleton
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+// --- ADIÇÃO DE ÍCONE ---
+import { TrendingUp } from "lucide-react"; 
 
 // --- Tipos de Dados para o Dashboard ---
 
@@ -21,15 +23,18 @@ interface GastoMes {
 interface GastoVeiculo {
   nome: string;
   total: number;
+  fill: string; // Cor adicionada pela função de fetch
 }
 
+// --- INTERFACE ATUALIZADA ---
 interface DashboardData {
   total_gasto_ano: number;
   total_litros_ano: number;
-  total_registros_ano: number;
   gasto_medio_por_litro: number;
+  media_km_l_frota: number; // Novo campo
   gastos_por_mes: GastoMes[];
   gastos_por_veiculo: GastoVeiculo[];
+  // Removido: total_registros_ano (substituído pela média)
 }
 
 // --- Função de Fetch (RPC) ---
@@ -43,10 +48,8 @@ const fetchDashboardData = async (ano: number): Promise<DashboardData> => {
     throw new Error(`Erro ao buscar dados do dashboard: ${error.message}`);
   }
   
-  // O Recharts PieChart precisa de cores
   const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8", "#FA8072", "#E0FFFF", "#D2691E", "#FF7F50", "#6495ED"];
 
-  // Adiciona cores aos dados do PieChart
   const gastosPorVeiculoComCores = data.gastos_por_veiculo?.map((item: GastoVeiculo, index: number) => ({
     ...item,
     fill: COLORS[index % COLORS.length],
@@ -140,7 +143,7 @@ export default function Dashboard() {
           </Select>
         </div>
 
-        {/* --- Stats Rápidos (Kpis) --- */}
+        {/* --- Stats Rápidos (Kpis) --- ATUALIZADO --- */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -181,20 +184,25 @@ export default function Dashboard() {
               </div>
             </CardContent>
           </Card>
+          
+          {/* --- CARTÃO SUBSTITUÍDO --- */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total de Registros</CardTitle>
-              <span className="text-lg text-muted-foreground">#</span>
+              <CardTitle className="text-sm font-medium">Média da Frota (Km/L)</CardTitle>
+              <TrendingUp className="h-5 w-5 text-green-600" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {stats.total_registros_ano}
+                {stats.media_km_l_frota.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                })}
               </div>
             </CardContent>
           </Card>
+          {/* --- FIM DA SUBSTITUIÇÃO --- */}
         </div>
         
-        {/* --- Gráficos --- */}
+        {/* --- Gráficos (Sem alterações) --- */}
         <div className="grid gap-6 md:grid-cols-2">
           {/* Gráfico de Barras: Gasto Mensal */}
           <Card>
