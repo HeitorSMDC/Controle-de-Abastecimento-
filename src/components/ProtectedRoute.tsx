@@ -3,11 +3,19 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Layout } from "./Layout";
+import { toast } from "sonner"; // Importe o toast para dar feedback
 
-// NOVO: A única mudança é aqui
-// 'export function ProtectedRoute' tornou-se 'export default function ProtectedRoute'
-export default function ProtectedRoute({ children }: { children?: React.ReactNode }) {
-  const { user, loading } = useAuth();
+// Defina o tipo UserRole aqui (ou importe de AuthContext se preferir)
+type UserRole = "admin" | "coordenador" | "usuario";
+
+// Adicione 'allowedRoles' às props
+interface ProtectedRouteProps {
+  children?: React.ReactNode;
+  allowedRoles?: UserRole[]; // Lista de permissões permitidas
+}
+
+export default function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
+  const { user, userRole, loading } = useAuth();
 
   if (loading) {
     return (
@@ -22,6 +30,18 @@ export default function ProtectedRoute({ children }: { children?: React.ReactNod
   if (!user) {
     return <Navigate to="/login" replace />;
   }
+
+  // --- NOVA LÓGICA DE VERIFICAÇÃO ---
+  // Se 'allowedRoles' foi definido E (o utilizador não tem permissão OU a permissão dele não está na lista)
+  if (allowedRoles && (!userRole || !allowedRoles.includes(userRole))) {
+    // Damos um feedback e redirecionamos
+    toast.error("Acesso Negado", {
+      description: "Não tem permissão para aceder a esta página.",
+    });
+    // Redireciona para o Dashboard (ou qualquer página inicial segura)
+    return <Navigate to="/dashboard" replace />;
+  }
+  // --- FIM DA NOVA LÓGICA ---
 
   return children ? <>{children}</> : <Outlet />;
 }
