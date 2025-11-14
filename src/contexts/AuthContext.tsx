@@ -1,3 +1,5 @@
+// src/contexts/AuthContext.tsx
+
 import { createContext, useContext, useEffect, useState } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -71,7 +73,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    navigate("/auth");
+    // --- CORREÇÃO AQUI ---
+    // A rota correta é /login, como definido em App.tsx
+    navigate("/login"); 
+    // --- FIM DA CORREÇÃO ---
   };
 
   return (
