@@ -20,6 +20,7 @@ export const veiculoSchema = z.object({
 });
 export type VeiculoFormData = z.infer<typeof veiculoSchema>;
 
+// --- SCHEMA ATUALIZADO ---
 export const abastecimentoSchema = z.object({
   data: z.string().min(1, "Data é obrigatória"),
   veiculo: z.string().min(1, "Veículo é obrigatório"),
@@ -29,8 +30,12 @@ export const abastecimentoSchema = z.object({
   matricula: z.string().min(1, "Matrícula é obrigatória"),
   quantidade_litros: z.number().min(0.01, "Quantidade deve ser positiva"),
   valor_reais: z.number().min(0.01, "Valor deve ser positivo"),
+  
+  // --- ADIÇÃO ---
+  odometro: z.number().min(1, "Odômetro deve ser um número positivo"),
 });
 export type AbastecimentoFormData = z.infer<typeof abastecimentoSchema>;
+// --- FIM DA ATUALIZAÇÃO ---
 
 export const manutencaoSchema = z.object({
   placa: z.string().min(1, "Veículo é obrigatório"),
