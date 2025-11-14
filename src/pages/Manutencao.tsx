@@ -1,10 +1,10 @@
 // src/pages/Manutencao.tsx
 
-import { useState, useMemo, useEffect } from "react"; // Adicionado useEffect
+import { useState, useMemo, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label } from "@/components/ui/label"; // Importação mantida, pode ser útil
 import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
@@ -40,7 +40,7 @@ import { manutencaoSchema, ManutencaoFormData } from "@/lib/validations";
 import {
   Form,
   FormControl,
-  FormDescription as FormDescriptionValid,
+  FormDescription as FormDescriptionValid, // Renomeado
   FormField,
   FormItem,
   FormLabel,
@@ -52,7 +52,7 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
-  AlertDialogDescription as AlertDialogDescriptionValid,
+  AlertDialogDescription as AlertDialogDescriptionValid, // Renomeado
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
@@ -67,13 +67,12 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { EmptyState } from "@/components/EmptyState";
 import { ResponsiveDialog } from "@/components/ResponsiveDialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"; // Adicionado DialogDescription
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ManutencaoCard } from "@/components/cards/ManutencaoCard";
 import { Separator } from "@/components/ui/separator";
 import { ListSkeleton } from "@/components/ListSkeleton";
 
-// NOVO: Importar useDebounce e Pagination
 import { useDebounce } from "@/hooks/use-debounce";
 import {
   Pagination,
@@ -84,7 +83,6 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 
-// NOVO: Constante para itens por página
 const ITEMS_PER_PAGE = 10;
 
 type StatusManutencao = "pendente" | "em_andamento" | "concluida" | "cancelada";
@@ -113,23 +111,20 @@ interface Veiculo {
   nome: string;
 }
 
-// NOVO: fetchManutencoes agora aceita paginação e busca
 const fetchManutencoes = async (page: number, searchTerm: string) => {
   const from = (page - 1) * ITEMS_PER_PAGE;
   const to = from + ITEMS_PER_PAGE - 1;
 
   let query = supabase
     .from("manutencoes")
-    .select("*", { count: "exact" }); // Pede o 'count' total
+    .select("*", { count: "exact" });
 
-  // Se houver um termo de busca, filtra por nome, placa OU descrição
   if (searchTerm) {
     query = query.or(
       `veiculo_nome.ilike.%${searchTerm}%,placa.ilike.%${searchTerm}%,descricao_problema.ilike.%${searchTerm}%`
     );
   }
 
-  // Aplica a ordem e a paginação
   query = query.order("data_registro", { ascending: false }).range(from, to);
   
   const { data, error, count } = await query;
@@ -137,7 +132,6 @@ const fetchManutencoes = async (page: number, searchTerm: string) => {
   return { data: data || [], count: count || 0 };
 };
 
-// Funções de fetch para Viaturas/Maquinário (não precisam de paginação)
 const fetchViaturas = async () => {
   const { data, error } = await supabase.from("viaturas").select("placa, nome");
   if (error) throw error;
@@ -159,28 +153,41 @@ export default function Manutencao() {
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   
-  // NOVO: Estados para paginação e busca "atrasada"
   const [page, setPage] = useState(1);
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   const form = useForm<ManutencaoFormData>({
-    // ... (useForm - sem alterações) ...
+    resolver: zodResolver(manutencaoSchema),
+    defaultValues: {
+      placa: "",
+      tipo_veiculo: "viatura",
+      veiculo_nome: "",
+      descricao_problema: "",
+      pecas_necessarias: "",
+      links_pecas: "",
+      status: "pendente",
+      data_registro: new Date().toISOString().split("T")[0],
+      data_conclusao: "",
+      custo_estimado: "",
+      custo_real: "",
+      observacoes: "",
+      nf_numero: "",
+      nf_data: "",
+      nf_fornecedor: "",
+    },
   });
 
   const currentStatus = form.watch("status");
 
-  // NOVO: useQuery modificado. Agora depende da 'page' e 'debouncedSearchTerm'
   const { data, isLoading: isLoadingManutencoes } = useQuery({
     queryKey: ["manutencoes", page, debouncedSearchTerm],
     queryFn: () => fetchManutencoes(page, debouncedSearchTerm),
   });
   
-  // NOVO: Pega os dados e o 'count' do useQuery
   const manutencoes: Manutencao[] = data?.data || [];
   const totalCount = data?.count || 0;
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
 
-  // Queries para os 'select' do formulário (não mudam)
   const { data: viaturas = [] } = useQuery<Veiculo[]>({
     queryKey: ["viaturas"],
     queryFn: fetchViaturas,
@@ -190,38 +197,63 @@ export default function Manutencao() {
     queryFn: fetchMaquinarios,
   });
   
-  // REMOVIDO: O 'useMemo' para 'filteredManutencoes' foi removido.
-  
   const { mutate: salvarManutencao, isPending: isSaving } = useMutation({
     mutationFn: async (data: ManutencaoFormData) => {
-      // ... (lógica da mutation - sem alterações) ...
+      // Converte strings vazias de 'custo' para null e strings de array para arrays
+      const record = {
+        ...data,
+        pecas_necessarias: data.pecas_necessarias ? data.pecas_necessarias.split(",").map(p => p.trim()) : null,
+        links_pecas: data.links_pecas ? data.links_pecas.split(",").map(l => l.trim()) : null,
+        data_conclusao: data.data_conclusao || null,
+        custo_estimado: data.custo_estimado ? parseFloat(data.custo_estimado) : null,
+        custo_real: data.custo_real ? parseFloat(data.custo_real) : null,
+        observacoes: data.observacoes || null,
+        nf_numero: data.nf_numero || null,
+        nf_data: data.nf_data || null,
+        nf_fornecedor: data.nf_fornecedor || null,
+      };
+
+      let response;
+      if (editingId) {
+        response = await supabase
+          .from("manutencoes")
+          .update(record)
+          .eq("id", editingId);
+      } else {
+        response = await supabase.from("manutencoes").insert(record);
+      }
+
+      const { error } = response;
+      if (error) throw error;
+      return editingId ? "Manutenção atualizada!" : "Manutenção registrada!";
     },
     onSuccess: (message) => {
       toast.success(message);
       resetForm();
       setDialogOpen(false);
-      // NOVO: Invalida a query base
       queryClient.invalidateQueries({ queryKey: ["manutencoes"] });
     },
     onError: (error: any) => {
+      console.error("Erro ao salvar:", error);
       toast.error(error.message || "Erro ao salvar manutenção");
     },
   });
 
   const { mutate: deletarManutencao } = useMutation({
     mutationFn: async (id: string) => {
-      // ... (lógica da mutation - sem alterações) ...
+      const { error } = await supabase.from("manutencoes").delete().eq("id", id);
+      if (error) throw error;
+      return "Manutenção excluída com sucesso!";
     },
     onSuccess: (message) => {
       toast.success(message);
       queryClient.invalidateQueries({ queryKey: ["manutencoes"] });
-      // NOVO: Se apagar o último item, volta a página
       if (manutencoes.length === 1 && page > 1) {
         setPage(page - 1);
       }
     },
     onError: (error: any) => {
-      toast.error("Erro ao excluir manutenção");
+      toast.error(error.message || "Erro ao excluir manutenção");
     }
   });
 
@@ -231,35 +263,145 @@ export default function Manutencao() {
   };
   
   const handleEdit = (manutencao: Manutencao) => {
-    // ... (handleEdit - sem alterações) ...
+    form.reset({
+      ...manutencao,
+      data_registro: manutencao.data_registro.split("T")[0], // Formata data
+      data_conclusao: manutencao.data_conclusao ? manutencao.data_conclusao.split("T")[0] : "",
+      pecas_necessarias: manutencao.pecas_necessarias ? manutencao.pecas_necessarias.join(", ") : "",
+      links_pecas: manutencao.links_pecas ? manutencao.links_pecas.join(", ") : "",
+      custo_estimado: manutencao.custo_estimado?.toString() || "",
+      custo_real: manutencao.custo_real?.toString() || "",
+      observacoes: manutencao.observacoes || "",
+      nf_numero: manutencao.nf_numero || "",
+      nf_data: manutencao.nf_data ? manutencao.nf_data.split("T")[0] : "",
+      nf_fornecedor: manutencao.nf_fornecedor || "",
+    });
+    setEditingId(manutencao.id);
+    setDialogOpen(true);
   };
 
   const resetForm = () => {
-    // ... (resetForm - sem alterações) ...
+    form.reset({
+      placa: "",
+      tipo_veiculo: "viatura",
+      veiculo_nome: "",
+      descricao_problema: "",
+      pecas_necessarias: "",
+      links_pecas: "",
+      status: "pendente",
+      data_registro: new Date().toISOString().split("T")[0],
+      data_conclusao: "",
+      custo_estimado: "",
+      custo_real: "",
+      observacoes: "",
+      nf_numero: "",
+      nf_data: "",
+      nf_fornecedor: "",
+    });
+    setEditingId(null);
   };
 
   const handleVeiculoChange = (placa: string) => {
-    // ... (handleVeiculoChange - sem alterações) ...
+    const tipo = form.getValues("tipo_veiculo");
+    const lista = tipo === "viatura" ? viaturas : maquinarios;
+    const veiculo = lista.find(v => v.placa === placa);
+    if (veiculo) {
+      form.setValue("veiculo_nome", veiculo.nome);
+    }
   };
   
-  // NOVO: Funções para mudar de página
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages) {
       setPage(newPage);
     }
   };
   
-  // NOVO: Quando a busca muda, volta para a página 1
   useEffect(() => {
     setPage(1);
   }, [debouncedSearchTerm]);
 
+  // --- CORREÇÃO 2: CONTEÚDO DO MODAL "VER DETALHES" ---
+  const renderDetalhesDialogContent = (manutencao: Manutencao) => {
+    
+    // Componente auxiliar para não repetir código
+    const DetailItem = ({ label, value, children }: { label: string; value?: string | number | null; children?: React.ReactNode }) => {
+      const displayValue = value || children;
+      if (!displayValue) return null; // Não mostra o campo se estiver vazio
+      return (
+        <div>
+          <p className="text-xs font-medium text-muted-foreground">{label}</p>
+          <div className="text-sm">{displayValue}</div>
+        </div>
+      );
+    };
 
-  const renderDetalhesDialogContent = (manutencao: Manutencao) => (
-    <>
-      {/* ... (Conteúdo do Dialog "Ver Detalhes" - sem alterações) ... */}
-    </>
-  );
+    const statusInfo = statusOptionsManutencao.find(s => s.value === manutencao.status);
+    const statusVariant = statusVariantMapManutencao[manutencao.status] || "outline";
+
+    return (
+      <>
+        <DialogHeader>
+          <DialogTitle>{manutencao.veiculo_nome} ({manutencao.placa})</DialogTitle>
+          <DialogDescription>
+            <Badge variant={statusVariant} className="mt-2">
+              {statusInfo?.label}
+            </Badge>
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-6">
+          <Separator />
+          <h4 className="font-semibold">Problema e Peças</h4>
+          <DetailItem label="Descrição do Problema" value={manutencao.descricao_problema} />
+          <DetailItem label="Peças Necessárias">
+            {manutencao.pecas_necessarias && manutencao.pecas_necessarias.length > 0 ? (
+              <ul className="list-disc pl-5">
+                {manutencao.pecas_necessarias.map((peca, i) => <li key={i}>{peca}</li>)}
+              </ul>
+            ) : "N/A"}
+          </DetailItem>
+          <DetailItem label="Links das Peças">
+            {manutencao.links_pecas && manutencao.links_pecas.length > 0 ? (
+              <ul className="space-y-1">
+                {manutencao.links_pecas.map((link, i) => (
+                  <li key={i}>
+                    <a href={link} target="_blank" rel="noopener noreferrer" className="text-primary underline hover:opacity-80 flex items-center gap-1">
+                      <ExternalLink className="h-3 w-3" />
+                      {link.length > 50 ? `${link.substring(0, 50)}...` : link}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            ) : "N/A"}
+          </DetailItem>
+
+          <Separator />
+          <h4 className="font-semibold">Datas e Custos</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <DetailItem label="Data do Registro" value={new Date(manutencao.data_registro).toLocaleDateString("pt-BR")} />
+            <DetailItem label="Data de Conclusão" value={manutencao.data_conclusao ? new Date(manutencao.data_conclusao).toLocaleDateString("pt-BR") : "N/A"} />
+            <DetailItem label="Custo Estimado" value={manutencao.custo_estimado ? `R$ ${manutencao.custo_estimado.toFixed(2)}` : "N/A"} />
+            <DetailItem label="Custo Real" value={manutencao.custo_real ? `R$ ${manutencao.custo_real.toFixed(2)}` : "N/A"} />
+          </div>
+
+          {(manutencao.nf_numero || manutencao.nf_data || manutencao.nf_fornecedor) && (
+            <>
+              <Separator />
+              <h4 className="font-semibold">Nota Fiscal</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <DetailItem label="Nº da NF" value={manutencao.nf_numero} />
+                <DetailItem label="Data da NF" value={manutencao.nf_data ? new Date(manutencao.nf_data).toLocaleDateString("pt-BR") : null} />
+                <DetailItem label="Fornecedor" value={manutencao.nf_fornecedor} className="col-span-2" />
+              </div>
+            </>
+          )}
+
+          <Separator />
+          <DetailItem label="Observações" value={manutencao.observacoes} />
+        </div>
+      </>
+    );
+  };
+  // --- FIM DA CORREÇÃO 2 ---
 
 
   const renderContent = () => {
@@ -267,7 +409,6 @@ export default function Manutencao() {
       return <ListSkeleton />;
     }
     
-    // NOVO: Lógica de EmptyState atualizada
     if (totalCount === 0 && debouncedSearchTerm === "") {
       return (
         <EmptyState
@@ -291,7 +432,6 @@ export default function Manutencao() {
       );
     }
     
-    // NOVO: O conteúdo principal (mobile ou desktop)
     const listContent = isMobile ? (
       <div className="space-y-4 p-4">
         {manutencoes.map((manutencao) => (
@@ -306,6 +446,7 @@ export default function Manutencao() {
                     Ver Detalhes
                   </Button>
                 </DialogTrigger>
+                {/* O conteúdo agora é renderizado pela função */}
                 <DialogContent className="max-w-lg">
                   {renderDetalhesDialogContent(manutencao)}
                 </DialogContent>
@@ -389,6 +530,7 @@ export default function Manutencao() {
                         Ver Detalhes
                       </Button>
                     </DialogTrigger>
+                    {/* O conteúdo agora é renderizado pela função */}
                     <DialogContent className="max-w-2xl">
                       {renderDetalhesDialogContent(manutencao)}
                     </DialogContent>
@@ -434,7 +576,6 @@ export default function Manutencao() {
       </Table>
     );
 
-    // NOVO: Retorna o conteúdo E a paginação
     return (
       <>
         {listContent}
@@ -501,10 +642,10 @@ export default function Manutencao() {
               </Button>
             }
           >
+            {/* --- INÍCIO DA CORREÇÃO 1: FORMULÁRIO PRINCIPAL --- */}
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
                 
-                {/* ... (Formulário de Manutenção - sem alterações, a lógica condicional da NF já está aqui) ... */}
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -567,6 +708,12 @@ export default function Manutencao() {
                                 ))}
                           </SelectContent>
                         </Select>
+                        {/* Campo oculto para o nome do veículo */}
+                        <FormField
+                          control={form.control}
+                          name="veiculo_nome"
+                          render={({ field }) => <input type="hidden" {...field} />}
+                        />
                         <FormMessage />
                       </FormItem>
                     )}
@@ -803,6 +950,7 @@ export default function Manutencao() {
                 </Button>
               </form>
             </Form>
+            {/* --- FIM DA CORREÇÃO 1 --- */}
           </ResponsiveDialog>
           
         </div>
