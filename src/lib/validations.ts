@@ -57,3 +57,28 @@ export const manutencaoSchema = z.object({
   nf_fornecedor: z.string().optional().nullable(),
 });
 export type ManutencaoFormData = z.infer<typeof manutencaoSchema>;
+
+
+// --- ADIÇÃO TANQUE (O que faltava) ---
+
+export const tanqueSchema = z.object({
+  nome: z.string().min(3, "O nome deve ter pelo menos 3 caracteres"),
+  capacidade_litros: z.number().min(1, "A capacidade deve ser positiva"),
+  litros_atuais: z.number().min(0, "Os litros atuais não podem ser negativos"),
+  tipo_combustivel: z.string().min(1, "O tipo de combustível é obrigatório"),
+});
+export type TanqueFormData = z.infer<typeof tanqueSchema>;
+
+
+export const tanqueMovimentacaoSchema = z.object({
+  tanque_id: z.string().uuid("ID do tanque inválido"),
+  tipo: z.enum(["entrada", "saida"]),
+  litros: z.number().min(0.01, "A quantidade de litros deve ser positiva"),
+  valor_reais: z.string().optional().nullable(), // Usamos string para o form, convertemos depois
+  responsavel_id: z.string().uuid("ID do responsável inválido"),
+  responsavel_nome: z.string().min(1, "Nome do responsável é obrigatório"),
+  observacao: z.string().optional().nullable(),
+});
+export type TanqueMovimentacaoFormData = z.infer<typeof tanqueMovimentacaoSchema>;
+
+// --- FIM DAS ADIÇÕES ---
