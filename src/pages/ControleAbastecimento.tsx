@@ -1,6 +1,6 @@
 // src/pages/ControleAbastecimento.tsx
 
-import { useState, useMemo, useEffect } from "react"; // Adicionado useEffect
+import { useState, useMemo, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Gauge, Search, TrendingUp, DollarSign } from "lucide-react"; // Ícones novos
+import { Plus, Pencil, Trash2, Gauge, Search, TrendingUp, DollarSign } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 import { useForm } from "react-hook-form";
@@ -45,6 +45,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { AbastecimentoCard } from "@/components/cards/AbastecimentoCard";
 import { ListSkeleton } from "@/components/ListSkeleton";
 
+// (As interfaces VeiculoSelecao, MotoristaSelecao, Abastecimento não mudam)
 interface VeiculoSelecao {
   placa: string;
   nome: string;
@@ -54,8 +55,6 @@ interface MotoristaSelecao {
   matricula: string;
   nome: string;
 }
-
-// --- INTERFACE ATUALIZADA ---
 interface Abastecimento {
   id: string;
   data: string;
@@ -69,12 +68,12 @@ interface Abastecimento {
   semana: number;
   mes: number;
   ano: number;
-  // Campos novos
   odometro: number | null;
   km_percorridos: number | null;
   media_km_l: number | null;
 }
 
+// (Funções getWeekNumber, fetchAbastecimentos, fetchViaturas, fetchMaquinarios, fetchMotoristas não mudam)
 const getWeekNumber = (date: Date): number => {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   const dayNum = d.getUTCDay() || 7;
@@ -110,7 +109,7 @@ const fetchMotoristas = async () => {
   if (error) throw error;
   return (data as MotoristaSelecao[]) || [];
 };
-// --- FIM DAS NOVAS FUNÇÕES DE FETCH ---
+
 
 export default function ControleAbastecimento() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -123,7 +122,6 @@ export default function ControleAbastecimento() {
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   
-  // --- NOVO ESTADO LOCAL PARA O VALOR UNITÁRIO ---
   const [valorUnitario, setValorUnitario] = useState(0);
 
   const form = useForm<AbastecimentoFormData>({
@@ -141,18 +139,19 @@ export default function ControleAbastecimento() {
     },
   });
   
-  // --- LÓGICA DE CÁLCULO AUTOMÁTICO (VALOR UNITÁRIO) ---
+  // (Lógica de cálculo automático do Valor Unitário - SEM ALTERAÇÕES)
   const watchLitros = form.watch("quantidade_litros");
   const watchValorTotal = form.watch("valor_reais");
 
-  // Atualiza o Valor Unitário (estado local) se os Litros ou Valor Total mudarem
   useEffect(() => {
     if (watchLitros > 0 && watchValorTotal > 0) {
       setValorUnitario(watchValorTotal / watchLitros);
+    } else if (watchLitros === 0 && watchValorTotal === 0) {
+      // Se ambos forem resetados, reseta o valor unitário
+      if (valorUnitario !== 0) setValorUnitario(0);
     }
-  }, [watchLitros, watchValorTotal]);
+  }, [watchLitros, watchValorTotal, valorUnitario]);
 
-  // Atualiza o Valor Total (no form) se o Valor Unitário mudar
   const handleValorUnitarioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const unitario = parseFloat(e.target.value) || 0;
     setValorUnitario(unitario);
@@ -161,7 +160,6 @@ export default function ControleAbastecimento() {
     }
   };
   
-  // Atualiza o Valor Total (no form) se os Litros mudarem (e o unitário estiver preenchido)
   const handleLitrosChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const litros = parseFloat(e.target.value) || 0;
     form.setValue("quantidade_litros", litros, { shouldValidate: true });
@@ -169,7 +167,7 @@ export default function ControleAbastecimento() {
       form.setValue("valor_reais", litros * valorUnitario, { shouldValidate: true });
     }
   };
-  // --- FIM DA LÓGICA DO VALOR UNITÁRIO ---
+  // (Fim da lógica do Valor Unitário)
 
 
   const { data, isLoading } = useQuery<Abastecimento[]>({
@@ -194,7 +192,7 @@ export default function ControleAbastecimento() {
 
   const veiculosList = useMemo(() => [...viaturas, ...maquinarios].sort((a, b) => a.nome.localeCompare(b.nome)), [viaturas, maquinarios]);
 
-  // --- LÓGICA DE SALVAR ATUALIZADA (CÁLCULO AUTOMÁTICO) ---
+  // --- MUTATION SALVAR ATUALIZADA ---
   const { mutate: salvarAbastecimento, isPending: isSaving } = useMutation({
     mutationFn: async (data: AbastecimentoFormData) => {
       const { data: validatedData, error: zodError } = abastecimentoSchema.safeParse(data);
@@ -206,83 +204,96 @@ export default function ControleAbastecimento() {
       const dataObj = new Date(ano, mes - 1, dia);
       const semana = getWeekNumber(dataObj);
 
-      // --- O PULO DO GATO (CÁLCULO AUTOMÁTICO) ---
-      let km_percorridos = null;
-      let media_km_l = null;
-
-      // 1. Busca o último registro de odômetro para este veículo
-      const { data: ultimoRegistro, error: odometroError } = await supabase
-        .from("controle_abastecimento")
-        .select("odometro, data")
-        .eq("placa", validatedData.placa)
-        .lt("data", validatedData.data) // Apenas registros ANTES da data atual
-        .order("data", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (odometroError) {
-         console.warn("Aviso: Não foi possível buscar o odômetro anterior.", odometroError.message);
-      }
-
-      // 2. Calcula
-      if (ultimoRegistro && ultimoRegistro.odometro && validatedData.odometro > ultimoRegistro.odometro) {
-        km_percorridos = validatedData.odometro - ultimoRegistro.odometro;
-        if (validatedData.quantidade_litros > 0) {
-          media_km_l = km_percorridos / validatedData.quantidade_litros;
-        }
-      }
-      // --- FIM DO CÁLCULO ---
+      // --- REMOVEMOS O CÁLCULO CLIENT-SIDE DAQUI ---
 
       const record = {
         ...validatedData,
         ano,
         mes,
         semana,
-        // Novos campos
         odometro: validatedData.odometro,
-        km_percorridos: km_percorridos,
-        media_km_l: media_km_l,
+        // km_percorridos e media_km_l serão definidos pela função SQL
       };
 
       let response;
       if (editingId) {
-        // ATENÇÃO: Se editar um registro antigo, o cálculo pode afetar registros futuros.
-        // Por simplicidade, esta lógica recalcula apenas o registro atual.
-        // Uma lógica mais complexa seria necessária para recalcular todos os registros futuros.
         response = await supabase
           .from("controle_abastecimento")
           .update(record)
           .eq("id", editingId);
       } else {
+        // Ao inserir, não definimos km_percorridos ou media_km_l
         response = await supabase.from("controle_abastecimento").insert(record);
       }
 
       const { error } = response;
       if (error) throw error;
-      return editingId ? "Registro atualizado com sucesso!" : "Registro salvo com sucesso!";
+      
+      // Retornamos a placa para usar no onSuccess
+      return { 
+        message: editingId ? "Registro atualizado com sucesso!" : "Registro salvo com sucesso!",
+        placa: validatedData.placa
+      };
     },
-    onSuccess: (message) => {
+    onSuccess: ({ message, placa }) => {
       toast.success(message);
+      
+      // --- LÓGICA DE RECALCULAR (RPC) ---
+      // Disparamos o recálculo na base de dados em segundo plano
+      supabase.rpc('recalcular_medias_veiculo', { placa_veiculo: placa })
+        .then(({ error }) => {
+          if (error) {
+            console.error("Erro ao recalcular médias:", error.message);
+            // Opcional: notificar o utilizador que o recálculo falhou
+            // toast.error("Falha ao recalcular médias automáticas.");
+          }
+        });
+      // --- FIM DA LÓGICA RPC ---
+
       setIsDialogOpen(false);
       resetForm();
+      // Invalida as queries para forçar o recarregamento dos dados
       queryClient.invalidateQueries({ queryKey: ["abastecimentos"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] }); // Invalida o dashboard
     },
     onError: (error: any) => {
       toast.error(error.message || "Erro ao salvar registro");
     },
   });
-  // --- FIM DA LÓGICA DE SALVAR ---
+  // --- FIM DA MUTATION SALVAR ---
 
 
   const { mutate: deletarAbastecimento } = useMutation({
     mutationFn: async (id: string) => {
+      // --- ATUALIZADO: Precisamos da placa ANTES de deletar ---
+      const { data: registro } = await supabase
+        .from("controle_abastecimento")
+        .select("placa")
+        .eq("id", id)
+        .single();
+      
       const { error } = await supabase.from("controle_abastecimento").delete().eq("id", id);
       if (error) throw error;
-      return "Registro excluído com sucesso!";
+      
+      return { 
+        message: "Registro excluído com sucesso!", 
+        placa: registro?.placa 
+      };
     },
-    onSuccess: (message) => {
+    onSuccess: ({ message, placa }) => {
       toast.success(message);
+      
+      // --- LÓGICA DE RECALCULAR (RPC) ---
+      if (placa) {
+        supabase.rpc('recalcular_medias_veiculo', { placa_veiculo: placa })
+          .then(({ error }) => {
+            if (error) console.error("Erro ao recalcular médias após deleção:", error.message);
+          });
+      }
+      // --- FIM DA LÓGICA RPC ---
+      
       queryClient.invalidateQueries({ queryKey: ["abastecimentos"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] }); // Invalida o dashboard
     },
     onError: (error: any) => {
       toast.error(error.message || "Erro ao excluir registro");
@@ -307,17 +318,16 @@ export default function ControleAbastecimento() {
       odometro: 0,
     });
     setEditingId(null);
-    setValorUnitario(0); // Limpa o estado local também
+    setValorUnitario(0);
   };
 
   const handleEdit = (abastecimento: Abastecimento) => {
     form.reset({
       ...abastecimento,
       cartao: abastecimento.cartao || "",
-      odometro: abastecimento.odometro || 0, // Garante que não é null
+      odometro: abastecimento.odometro || 0,
     });
     
-    // Calcula e define o valor unitário para o formulário de edição
     if (abastecimento.quantidade_litros > 0 && abastecimento.valor_reais > 0) {
       setValorUnitario(abastecimento.valor_reais / abastecimento.quantidade_litros);
     } else {
@@ -328,6 +338,7 @@ export default function ControleAbastecimento() {
     setIsDialogOpen(true);
   };
 
+  // (handleVeiculoChange, handleMotoristaChange, canDelete, filteredAbastecimentos, weeklyTotals, monthTotal - SEM ALTERAÇÕES)
   const handleVeiculoChange = (placa: string) => {
     const veiculoSelecionado = veiculosList.find(v => v.placa === placa);
     if (veiculoSelecionado) {
@@ -396,7 +407,11 @@ export default function ControleAbastecimento() {
     );
   }, [abastecimentos]);
 
-  const renderContent = () => {
+  
+  // (renderContent e o JSX principal - SEM ALTERAÇÕES)
+  // ... (Cole o restante do seu arquivo `ControleAbastecimento.tsx` daqui para baixo)
+  // ... (O JSX do `renderContent` e do `return` principal)
+    const renderContent = () => {
     if (isLoading) {
       return <ListSkeleton />;
     }
@@ -425,7 +440,6 @@ export default function ControleAbastecimento() {
       );
     }
 
-    // --- CARD MÓVEL ATUALIZADO ---
     if (isMobile) {
       return (
         <div className="space-y-4 p-4">
@@ -473,7 +487,6 @@ export default function ControleAbastecimento() {
       );
     }
 
-    // --- TABELA DESKTOP ATUALIZADA ---
     return (
       <div className="overflow-x-auto">
         <Table>
@@ -507,7 +520,6 @@ export default function ControleAbastecimento() {
                 <TableCell>{abastecimento.quantidade_litros.toFixed(2)} L</TableCell>
                 <TableCell>R$ {abastecimento.valor_reais.toFixed(2)}</TableCell>
                 
-                {/* Campos Calculados */}
                 <TableCell>
                   {abastecimento.quantidade_litros > 0
                     ? `R$ ${(abastecimento.valor_reais / abastecimento.quantidade_litros).toFixed(3)}`
@@ -587,7 +599,6 @@ export default function ControleAbastecimento() {
               </Button>
             }
           >
-            {/* --- FORMULÁRIO ATUALIZADO --- */}
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
                 
@@ -743,7 +754,7 @@ export default function ControleAbastecimento() {
                             step="0.01"
                             placeholder="0.00"
                             {...field}
-                            onChange={handleLitrosChange} // Usa o handler customizado
+                            onChange={handleLitrosChange}
                           />
                         </FormControl>
                         <FormMessage />
@@ -796,7 +807,6 @@ export default function ControleAbastecimento() {
           </ResponsiveDialog>
         </div>
 
-        {/* Filtros e Totais (Sem alterações) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card>
             <CardHeader>
