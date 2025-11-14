@@ -1,6 +1,6 @@
 // src/pages/Motoristas.tsx
 
-import { useState, useMemo, useEffect } from "react"; // useMemo e useEffect removidos para filtro
+import { useState, useMemo, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Layout } from "@/components/Layout";
@@ -43,7 +43,6 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { MotoristaCard } from "@/components/cards/MotoristaCard";
 import { ListSkeleton } from "@/components/ListSkeleton";
 
-// NOVO: Importar useDebounce e Pagination
 import { useDebounce } from "@/hooks/use-debounce";
 import {
   Pagination,
@@ -54,7 +53,6 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 
-// NOVO: Constante para itens por página
 const ITEMS_PER_PAGE = 10;
 
 interface Motorista {
@@ -64,23 +62,20 @@ interface Motorista {
   senha: string;
 }
 
-// NOVO: fetchMotoristas agora aceita paginação e busca
 const fetchMotoristas = async (page: number, searchTerm: string) => {
   const from = (page - 1) * ITEMS_PER_PAGE;
   const to = from + ITEMS_PER_PAGE - 1;
 
   let query = supabase
     .from("motoristas")
-    .select("*", { count: "exact" }); // Pede o 'count' total
+    .select("*", { count: "exact" }); 
 
-  // Se houver um termo de busca, filtra por nome OU matrícula
   if (searchTerm) {
     query = query.or(
       `nome.ilike.%${searchTerm}%,matricula.ilike.%${searchTerm}%`
     );
   }
 
-  // Aplica a ordem e a paginação
   query = query.order("nome").range(from, to);
 
   const { data, error, count } = await query;
@@ -98,7 +93,6 @@ export default function Motoristas() {
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
 
-  // NOVO: Estados para paginação e busca "atrasada"
   const [page, setPage] = useState(1);
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
@@ -111,45 +105,60 @@ export default function Motoristas() {
     },
   });
 
-  // NOVO: useQuery modificado. Agora depende da 'page' e 'debouncedSearchTerm'
   const { data, isLoading } = useQuery({
-    queryKey: ["motoristas", page, debouncedSearchTerm], // A chave de cache inclui a página e a busca
+    queryKey: ["motoristas", page, debouncedSearchTerm],
     queryFn: () => fetchMotoristas(page, debouncedSearchTerm),
   });
 
-  // NOVO: Pega os dados e o 'count' do useQuery
   const motoristas: Motorista[] = data?.data || [];
   const totalCount = data?.count || 0;
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
 
-  // REMOVIDO: O 'useMemo' para 'filteredMotoristas' foi removido.
-  // A base de dados já nos entrega os dados filtrados e paginados.
-
-  // ... (Mutations: salvarMotorista, deletarMotorista - sem alterações) ...
   const { mutate: salvarMotorista, isPending: isSaving } = useMutation({
     mutationFn: async (data: MotoristaFormData) => {
-      // ...
+      const { data: validatedData, error: zodError } = motoristaSchema.safeParse(data);
+      if (zodError) {
+        throw new Error(zodError.errors.map((e) => e.message).join(", "));
+      }
+      
+      let response;
+      if (editingId) {
+        response = await supabase
+          .from("motoristas")
+          .update(validatedData)
+          .eq("id", editingId);
+      } else {
+        response = await supabase.from("motoristas").insert(validatedData);
+      }
+
+      const { error } = response;
+      if (error) throw error;
+      return editingId ? "Motorista atualizado!" : "Motorista salvo!";
     },
     onSuccess: (message) => {
       toast.success(message);
       setIsDialogOpen(false);
       resetForm();
-      // NOVO: Invalida *todas* as queries de 'motoristas' para garantir que a paginação se atualiza
       queryClient.invalidateQueries({ queryKey: ["motoristas"] });
     },
     onError: (error: any) => {
-      toast.error(error.message || "Erro ao salvar motorista");
+      if (error.code === '23505' && error.message.includes('motoristas_matricula_key')) {
+         toast.error("Erro: A matrícula informada já existe.");
+      } else {
+         toast.error(error.message || "Erro ao salvar motorista");
+      }
     },
   });
 
   const { mutate: deletarMotorista } = useMutation({
     mutationFn: async (id: string) => {
-      // ...
+      const { error } = await supabase.from("motoristas").delete().eq("id", id);
+      if (error) throw error;
+      return "Motorista excluído com sucesso!";
     },
     onSuccess: (message) => {
       toast.success(message);
       queryClient.invalidateQueries({ queryKey: ["motoristas"] });
-      // NOVO: Se apagamos o último item de uma página, volta para a página anterior
       if (motoristas.length === 1 && page > 1) {
         setPage(page - 1);
       }
@@ -164,7 +173,11 @@ export default function Motoristas() {
   };
 
   const resetForm = () => {
-    form.reset();
+    form.reset({
+      nome: "",
+      matricula: "",
+      senha: "",
+    });
     setEditingId(null);
   };
   
@@ -178,14 +191,12 @@ export default function Motoristas() {
     setIsDialogOpen(true);
   };
 
-  // NOVO: Funções para mudar de página
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages) {
       setPage(newPage);
     }
   };
   
-  // NOVO: Quando a busca muda, volta para a página 1
   useEffect(() => {
     setPage(1);
   }, [debouncedSearchTerm]);
@@ -193,8 +204,16 @@ export default function Motoristas() {
 
   const canEdit = userRole === "admin" || userRole === "coordenador";
 
-  if (!canEdit) {
-    // ... (Acesso Negado) ...
+  if (!canEdit && !isLoading) {
+    return (
+      <Layout>
+        <EmptyState
+          icon={Users}
+          title="Acesso Negado"
+          description="Apenas administradores e coordenadores podem gerir motoristas."
+        />
+      </Layout>
+    );
   }
 
   const renderContent = () => {
@@ -202,7 +221,6 @@ export default function Motoristas() {
       return <ListSkeleton />;
     }
 
-    // NOVO: A lógica do EmptyState agora usa 'totalCount' e 'searchTerm'
     if (totalCount === 0 && debouncedSearchTerm === "") {
       return (
         <EmptyState
@@ -226,7 +244,6 @@ export default function Motoristas() {
       );
     }
 
-    // NOVO: O conteúdo principal (mobile ou desktop)
     const listContent = isMobile ? (
       <div className="space-y-4 p-4">
         {motoristas.map((motorista) => (
@@ -282,7 +299,8 @@ export default function Motoristas() {
               <TableCell>
                 <PasswordField
                   value={motorista.senha}
-                  onChange={() => {}}
+                  onChange={() => {}} // Apenas leitura
+                  readOnly
                   placeholder="••••••••"
                 />
               </TableCell>
@@ -327,7 +345,6 @@ export default function Motoristas() {
       </Table>
     );
 
-    // NOVO: Retorna o conteúdo E a paginação
     return (
       <>
         {listContent}
@@ -346,7 +363,6 @@ export default function Motoristas() {
                     className={page === 1 ? "pointer-events-none opacity-50" : ""}
                   />
                 </PaginationItem>
-                {/* Lógica simples de paginação (pode ser melhorada) */}
                 <PaginationItem>
                   <PaginationLink href="#" isActive>
                     Página {page} de {totalPages}
@@ -381,6 +397,7 @@ export default function Motoristas() {
             open={isDialogOpen}
             onOpenChange={setIsDialogOpen}
             title={editingId ? "Editar Motorista" : "Novo Motorista"}
+            description="Preencha os dados do motorista para registo."
             trigger={
               <Button onClick={resetForm}>
                 <Plus className="mr-2 h-4 w-4" />
@@ -419,7 +436,7 @@ export default function Motoristas() {
                 <FormField
                   control={form.control}
                   name="senha"
-                  render={({ field }) => (
+                  render={({ field: { onChange, value, ref } }) => ( // --- CORREÇÃO AQUI ---
                     <FormItem>
                       <FormLabel>Senha (Anotação)</FormLabel>
                       <FormControl>
@@ -427,7 +444,9 @@ export default function Motoristas() {
                           id="senha"
                           placeholder="Digite a senha para anotação"
                           required
-                          {...field}
+                          ref={ref} // Passa a ref
+                          value={value} // Passa o valor
+                          onChange={onChange} // Passa o onChange que espera o string
                         />
                       </FormControl>
                       <p className="text-xs text-muted-foreground">
