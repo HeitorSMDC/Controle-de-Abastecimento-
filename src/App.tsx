@@ -15,8 +15,8 @@ import Manutencao from "@/pages/Manutencao";
 import NotFound from "@/pages/NotFound";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
-// REMOVIDO: Importar a página Dashboard
-// import Dashboard from "@/pages/Dashboard";
+// NOVO: Importar a página Dashboard
+import Dashboard from "@/pages/Dashboard";
 
 const queryClient = new QueryClient();
 
@@ -27,20 +27,9 @@ function App() {
         <BrowserRouter>
           <AuthProvider>
             <Routes>
-              {/* Rota de Login */}
               <Route path="/login" element={<Auth />} />
               
-              {/* Rota Home (Controle de Abastecimento) */}
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <ControleAbastecimento />
-                  </ProtectedRoute>
-                }
-              />
-              
-              {/* REMOVIDA: Rota para o Dashboard 
+              {/* NOVO: Rota para o Dashboard (Reativada) */}
               <Route 
                 path="/dashboard" 
                 element={
@@ -49,8 +38,15 @@ function App() {
                   </ProtectedRoute>
                 } 
               />
-              */}
               
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <ControleAbastecimento />
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="/motoristas"
                 element={
@@ -83,8 +79,6 @@ function App() {
                   </ProtectedRoute>
                 }
               />
-              
-              {/* Rota "Não Encontrado" */}
               <Route path="*" element={<NotFound />} />
             </Routes>
             <Toaster richColors />
