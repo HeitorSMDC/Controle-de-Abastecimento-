@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-// NOVO: Importar 'LayoutDashboard'
-import { LogOut, Car, Truck, Users, Gauge, Wrench, Menu, LayoutDashboard } from "lucide-react";
+// --- ÍCONE ADICIONADO ---
+import { LogOut, Car, Truck, Users, Gauge, Wrench, Menu, LayoutDashboard, ShieldCheck } from "lucide-react";
 import logo from "@/assets/defesa-civil-logo.png";
 
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -20,14 +20,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
 
   const canViewDrivers = userRole === "admin" || userRole === "coordenador";
+  const isAdmin = userRole === "admin"; // --- ADICIONADO ---
 
-  // NOVO: Adicionado link para o Dashboard (como primeiro item)
   const navLinks = [
     {
-      to: "/dashboard", // NOVO
-      label: "Dashboard", // NOVO
-      icon: LayoutDashboard, // NOVO
-      show: true, // NOVO
+      to: "/dashboard",
+      label: "Dashboard",
+      icon: LayoutDashboard,
+      show: true,
     },
     {
       to: "/",
@@ -44,6 +44,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { to: "/viaturas", label: "Viaturas", icon: Car, show: true },
     { to: "/maquinario", label: "Maquinário", icon: Truck, show: true },
     { to: "/manutencao", label: "Manutenção", icon: Wrench, show: true },
+    // --- LINK ADICIONADO ---
+    {
+      to: "/usuarios",
+      label: "Utilizadores",
+      icon: ShieldCheck,
+      show: isAdmin, // Só aparece se for admin
+    },
+    // --- FIM DA ADIÇÃO ---
   ];
 
   useEffect(() => {
@@ -55,14 +63,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
       .filter((link) => link.show)
       .map((link) => {
         
-        // A rota "/" (Abastecimento) precisa de 'end' para não ficar ativa quando /dashboard estiver ativa
         const isEnd = link.to === "/"; 
         
         const linkContent = (
           <NavLink
             key={link.to}
             to={link.to}
-            end={isEnd} // Adicionado 'end'
+            end={isEnd}
             className={({ isActive }) =>
               cn(
                 "flex items-center gap-2 font-medium transition-colors",
