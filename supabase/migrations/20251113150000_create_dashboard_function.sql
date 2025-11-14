@@ -1,26 +1,34 @@
--- supabase/migrations/20251113150000_create_dashboard_function.sql
+-- Remove a função antiga se ela existir, para garantir a recriação
+DROP FUNCTION IF EXISTS get_dashboard_stats(int);
 
-create or replace function get_dashboard_stats(ano_selecionado int)
-returns jsonb
-language plpgsql
-as $$
-declare
+-- Cria a função atualizada
+CREATE OR REPLACE FUNCTION get_dashboard_stats(ano_selecionado integer)
+RETURNS jsonb
+LANGUAGE plpgsql
+AS $$
+DECLARE
   stats jsonb;
-begin
-  select
+BEGIN
+  SELECT
     jsonb_build_object(
+      -- Cálculos de totais (sem alteração)
       'total_gasto_ano',
-      coalesce(sum(valor_reais), 0),
+      COALESCE(SUM(valor_reais), 0),
       'total_litros_ano',
-      coalesce(sum(quantidade_litros), 0),
-      'total_registros_ano',
-      count(*),
+      COALESCE(SUM(quantidade_litros), 0),
       'gasto_medio_por_litro',
-      coalesce(sum(valor_reais) / nullif(sum(quantidade_litros), 0), 0),
+      COALESCE(SUM(valor_reais) / NULLIF(SUM(quantidade_litros), 0), 0),
       
+      -- ### ESTA É A CORREÇÃO ###
+      -- Trocamos 'total_registros_ano' por 'media_km_l_frota'
+      -- Usamos AVG() para calcular a média de todas as médias válidas (ignorando nulos ou zeros)
+      'media_km_l_frota',
+      COALESCE(AVG(media_km_l), 0),
+      -- ### FIM DA CORREÇÃO ###
+
       'gastos_por_mes',
       (
-        select
+        SELECT
           jsonb_agg(
             jsonb_build_object(
               'mes', mes_numero,
@@ -28,55 +36,58 @@ begin
               'total', total_gasto
             )
           )
-        from (
-          select
+        FROM (
+          SELECT
             g.mes_numero,
-            to_char(to_timestamp(g.mes_numero::text, 'MM'), 'TMMonth') as mes_nome, -- 'TMMonth' remove espaços
-            coalesce(sum(ca.valor_reais), 0) as total_gasto
-          from
-            generate_series(1, 12) as g(mes_numero) -- Gera todos os 12 meses
-          left join
-            public.controle_abastecimento as ca
-            on g.mes_numero = ca.mes and ca.ano = ano_selecionado
-          group by
+            -- 'TMMonth' remove espaços em branco do nome do mês
+            to_char(to_timestamp(g.mes_numero::text, 'MM'), 'TMMonth') AS mes_nome,
+            COALESCE(SUM(ca.valor_reais), 0) AS total_gasto
+          FROM
+            generate_series(1, 12) AS g(mes_numero) -- Gera todos os 12 meses
+          LEFT JOIN
+            public.controle_abastecimento AS ca
+            ON g.mes_numero = ca.mes AND ca.ano = ano_selecionado
+          GROUP BY
             g.mes_numero
-          order by
+          ORDER BY
             g.mes_numero
-        ) as gastos_mensais
+        ) AS gastos_mensais
       ),
 
       'gastos_por_veiculo',
       (
-        select
+        SELECT
           jsonb_agg(
             jsonb_build_object(
               'nome', veiculo,
               'total', total_gasto
             )
           )
-        from (
-          select
+        FROM (
+          SELECT
             veiculo,
-            sum(valor_reais) as total_gasto
-          from
+            SUM(valor_reais) AS total_gasto
+          FROM
             public.controle_abastecimento
-          where
+          WHERE
             ano = ano_selecionado
-          group by
+          GROUP BY
             veiculo
-          order by
-            total_gasto desc
-          limit 10 -- Pega os 10 veículos com mais gastos
-        ) as gastos_veiculos
+          ORDER BY
+            total_gasto DESC
+          LIMIT 10 -- Pega os 10 veículos com mais gastos
+        ) AS gastos_veiculos
       )
     )
-  into
+  INTO
     stats
-  from
+  FROM
     public.controle_abastecimento
-  where
-    ano = ano_selecionado;
+  WHERE
+    ano = ano_selecionado
+    -- Adicionamos esta condição para que o AVG() calcule apenas sobre registros válidos
+    AND media_km_l IS NOT NULL AND media_km_l > 0; 
 
-  return stats;
-end;
+  RETURN stats;
+END;
 $$;
