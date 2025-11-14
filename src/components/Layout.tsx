@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-// REMOVIDO: 'LayoutDashboard' de lucide-react
-import { LogOut, Car, Truck, Users, Gauge, Wrench, Menu } from "lucide-react"; 
+// NOVO: Importar 'LayoutDashboard'
+import { LogOut, Car, Truck, Users, Gauge, Wrench, Menu, LayoutDashboard } from "lucide-react";
 import logo from "@/assets/defesa-civil-logo.png";
 
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -21,8 +21,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const canViewDrivers = userRole === "admin" || userRole === "coordenador";
 
-  // REMOVIDO: Link para o Dashboard
+  // NOVO: Adicionado link para o Dashboard (como primeiro item)
   const navLinks = [
+    {
+      to: "/dashboard", // NOVO
+      label: "Dashboard", // NOVO
+      icon: LayoutDashboard, // NOVO
+      show: true, // NOVO
+    },
     {
       to: "/",
       label: "Abastecimento",
@@ -49,14 +55,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
       .filter((link) => link.show)
       .map((link) => {
         
-        // A rota "/" (Abastecimento) precisa de 'end'
+        // A rota "/" (Abastecimento) precisa de 'end' para não ficar ativa quando /dashboard estiver ativa
         const isEnd = link.to === "/"; 
         
         const linkContent = (
           <NavLink
             key={link.to}
             to={link.to}
-            end={isEnd}
+            end={isEnd} // Adicionado 'end'
             className={({ isActive }) =>
               cn(
                 "flex items-center gap-2 font-medium transition-colors",
