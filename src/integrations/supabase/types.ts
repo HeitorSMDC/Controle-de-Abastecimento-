@@ -1,3 +1,5 @@
+// src/integrations/supabase/types.ts
+
 export type Json =
   | string
   | number
@@ -14,6 +16,7 @@ export type Database = {
   }
   public: {
     Tables: {
+      // --- TABELA ATUALIZADA ---
       controle_abastecimento: {
         Row: {
           ano: number
@@ -30,6 +33,10 @@ export type Database = {
           updated_at: string
           valor_reais: number
           veiculo: string
+          // --- ADIÇÕES (Odômetro) ---
+          odometro: number | null
+          km_percorridos: number | null
+          media_km_l: number | null
         }
         Insert: {
           ano: number
@@ -46,6 +53,10 @@ export type Database = {
           updated_at?: string
           valor_reais: number
           veiculo: string
+          // --- ADIÇÕES (Odômetro) ---
+          odometro?: number | null
+          km_percorridos?: number | null
+          media_km_l?: number | null
         }
         Update: {
           ano?: number
@@ -62,9 +73,15 @@ export type Database = {
           updated_at?: string
           valor_reais?: number
           veiculo?: string
+          // --- ADIÇÕES (Odômetro) ---
+          odometro?: number | null
+          km_percorridos?: number | null
+          media_km_l?: number | null
         }
         Relationships: []
       }
+      // --- FIM DA ATUALIZAÇÃO ---
+
       manutencoes: {
         Row: {
           created_at: string
@@ -81,7 +98,10 @@ export type Database = {
           status: Database["public"]["Enums"]["status_manutencao"]
           tipo_veiculo: string
           updated_at: string
-          veiculo_nome: string
+          // --- ADIÇÕES (NF) ---
+          nf_numero: string | null
+          nf_data: string | null
+          nf_fornecedor: string | null
         }
         Insert: {
           created_at?: string
@@ -98,7 +118,10 @@ export type Database = {
           status?: Database["public"]["Enums"]["status_manutencao"]
           tipo_veiculo: string
           updated_at?: string
-          veiculo_nome: string
+          // --- ADIÇÕES (NF) ---
+          nf_numero?: string | null
+          nf_data?: string | null
+          nf_fornecedor?: string | null
         }
         Update: {
           created_at?: string
@@ -115,7 +138,10 @@ export type Database = {
           status?: Database["public"]["Enums"]["status_manutencao"]
           tipo_veiculo?: string
           updated_at?: string
-          veiculo_nome?: string
+          // --- ADIÇÕES (NF) ---
+          nf_numero?: string | null
+          nf_data?: string | null
+          nf_fornecedor?: string | null
         }
         Relationships: []
       }
@@ -130,6 +156,8 @@ export type Database = {
           placa: string
           status: Database["public"]["Enums"]["status_type"]
           updated_at: string
+          // --- ADIÇÃO (Combustível) ---
+          tipo_combustivel: string
         }
         Insert: {
           ano: number
@@ -141,6 +169,8 @@ export type Database = {
           placa: string
           status?: Database["public"]["Enums"]["status_type"]
           updated_at?: string
+          // --- ADIÇÃO (Combustível) ---
+          tipo_combustivel: string
         }
         Update: {
           ano?: number
@@ -152,6 +182,8 @@ export type Database = {
           placa?: string
           status?: Database["public"]["Enums"]["status_type"]
           updated_at?: string
+          // --- ADIÇÃO (Combustível) ---
+          tipo_combustivel?: string
         }
         Relationships: []
       }
@@ -241,6 +273,8 @@ export type Database = {
           placa: string
           status: Database["public"]["Enums"]["status_type"]
           updated_at: string
+          // --- ADIÇÃO (Combustível) ---
+          tipo_combustivel: string
         }
         Insert: {
           ano: number
@@ -252,6 +286,8 @@ export type Database = {
           placa: string
           status?: Database["public"]["Enums"]["status_type"]
           updated_at?: string
+          // --- ADIÇÃO (Combustível) ---
+          tipo_combustivel: string
         }
         Update: {
           ano?: number
@@ -263,6 +299,8 @@ export type Database = {
           placa?: string
           status?: Database["public"]["Enums"]["status_type"]
           updated_at?: string
+          // --- ADIÇÃO (Combustível) ---
+          tipo_combustivel?: string
         }
         Relationships: []
       }
@@ -271,6 +309,12 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_dashboard_stats: {
+        Args: {
+          ano_selecionado: number
+        }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
