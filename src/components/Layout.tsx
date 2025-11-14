@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-// --- ÍCONE ADICIONADO ---
-import { LogOut, Car, Truck, Users, Gauge, Wrench, Menu, LayoutDashboard, ShieldCheck } from "lucide-react";
+// --- ÍCONE ADICIONADO (Droplet) ---
+import { LogOut, Car, Truck, Users, Gauge, Wrench, Menu, LayoutDashboard, ShieldCheck, Droplet } from "lucide-react";
 import logo from "@/assets/defesa-civil-logo.png";
 
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -20,7 +20,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
 
   const canViewDrivers = userRole === "admin" || userRole === "coordenador";
-  const isAdmin = userRole === "admin"; // --- ADICIONADO ---
+  const isAdmin = userRole === "admin";
 
   const navLinks = [
     {
@@ -35,6 +35,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
       icon: Gauge,
       show: true,
     },
+    // --- NOVO LINK ADICIONADO ---
+    {
+      to: "/tanque",
+      label: "Tanque",
+      icon: Droplet, // Ícone da gota
+      show: true,    // Mostrar para todos por enquanto
+    },
+    // --- FIM DA ADIÇÃO ---
     {
       to: "/motoristas",
       label: "Motoristas",
@@ -44,20 +52,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { to: "/viaturas", label: "Viaturas", icon: Car, show: true },
     { to: "/maquinario", label: "Maquinário", icon: Truck, show: true },
     { to: "/manutencao", label: "Manutenção", icon: Wrench, show: true },
-    // --- LINK ADICIONADO ---
     {
       to: "/usuarios",
       label: "Utilizadores",
       icon: ShieldCheck,
-      show: isAdmin, // Só aparece se for admin
+      show: isAdmin,
     },
-    // --- FIM DA ADIÇÃO ---
   ];
 
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [location.pathname]);
 
+  // (O resto do arquivo 'Layout.tsx' não precisa de alterações)
+  // ... (cole o restante do seu arquivo Layout.tsx aqui)
+  // ...
   const renderNavLinks = (isMobileLink = false) => {
     return navLinks
       .filter((link) => link.show)
