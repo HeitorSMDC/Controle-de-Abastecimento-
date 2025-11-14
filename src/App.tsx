@@ -5,6 +5,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
+import { toast } from "sonner"; // Importe o toast aqui
 
 import Auth from "@/pages/Auth";
 import ControleAbastecimento from "@/pages/ControleAbastecimento";
@@ -16,7 +17,7 @@ import NotFound from "@/pages/NotFound";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
 import Dashboard from "@/pages/Dashboard";
-import Usuarios from "@/pages/Usuarios"; // --- ADICIONAR ESTA LINHA ---
+import Usuarios from "@/pages/Usuarios";
 
 const queryClient = new QueryClient();
 
@@ -28,16 +29,16 @@ function App() {
           <AuthProvider>
             <Routes>
               <Route path="/login" element={<Auth />} />
-              
-              <Route 
-                path="/dashboard" 
+
+              <Route
+                path="/dashboard"
                 element={
                   <ProtectedRoute>
                     <Dashboard />
                   </ProtectedRoute>
-                } 
+                }
               />
-              
+
               <Route
                 path="/"
                 element={
@@ -46,14 +47,18 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+              
+              {/* --- ROTA ATUALIZADA --- */}
               <Route
                 path="/motoristas"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute allowedRoles={["admin", "coordenador"]}>
                     <Motoristas />
                   </ProtectedRoute>
                 }
               />
+              {/* --- FIM DA ATUALIZAÇÃO --- */}
+
               <Route
                 path="/viaturas"
                 element={
@@ -79,16 +84,16 @@ function App() {
                 }
               />
 
-              {/* --- ADICIONAR ESTA ROTA --- */}
+              {/* --- ROTA ATUALIZADA --- */}
               <Route
                 path="/usuarios"
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute allowedRoles={["admin"]}>
                     <Usuarios />
                   </ProtectedRoute>
                 }
               />
-              {/* --- FIM DA ADIÇÃO --- */}
+              {/* --- FIM DA ATUALIZAÇÃO --- */}
 
               <Route path="*" element={<NotFound />} />
             </Routes>
