@@ -5,7 +5,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
-import { toast } from "sonner"; // Importe o toast aqui
+import { toast } from "sonner"; // Importe o toast
 
 import Auth from "@/pages/Auth";
 import ControleAbastecimento from "@/pages/ControleAbastecimento";
@@ -17,7 +17,9 @@ import NotFound from "@/pages/NotFound";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
 import Dashboard from "@/pages/Dashboard";
-import Usuarios from "@/pages/Usuarios";
+import Usuarios from "@/pages/Usuarios"; 
+// --- ADICIONE ESTA NOVA PÁGINA ---
+import TanqueCombustivel from "@/pages/TanqueCombustivel";
 
 const queryClient = new QueryClient();
 
@@ -29,16 +31,16 @@ function App() {
           <AuthProvider>
             <Routes>
               <Route path="/login" element={<Auth />} />
-
-              <Route
-                path="/dashboard"
+              
+              <Route 
+                path="/dashboard" 
                 element={
                   <ProtectedRoute>
                     <Dashboard />
                   </ProtectedRoute>
-                }
+                } 
               />
-
+              
               <Route
                 path="/"
                 element={
@@ -47,8 +49,6 @@ function App() {
                   </ProtectedRoute>
                 }
               />
-              
-              {/* --- ROTA ATUALIZADA --- */}
               <Route
                 path="/motoristas"
                 element={
@@ -57,8 +57,6 @@ function App() {
                   </ProtectedRoute>
                 }
               />
-              {/* --- FIM DA ATUALIZAÇÃO --- */}
-
               <Route
                 path="/viaturas"
                 element={
@@ -83,8 +81,6 @@ function App() {
                   </ProtectedRoute>
                 }
               />
-
-              {/* --- ROTA ATUALIZADA --- */}
               <Route
                 path="/usuarios"
                 element={
@@ -93,7 +89,17 @@ function App() {
                   </ProtectedRoute>
                 }
               />
-              {/* --- FIM DA ATUALIZAÇÃO --- */}
+
+              {/* --- ADICIONE ESTA NOVA ROTA --- */}
+              <Route
+                path="/tanque"
+                element={
+                  <ProtectedRoute>
+                    <TanqueCombustivel />
+                  </ProtectedRoute>
+                }
+              />
+              {/* --- FIM DA ADIÇÃO --- */}
 
               <Route path="*" element={<NotFound />} />
             </Routes>
