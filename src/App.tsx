@@ -15,8 +15,8 @@ import Manutencao from "@/pages/Manutencao";
 import NotFound from "@/pages/NotFound";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
-// NOVO: Importar a página Dashboard
 import Dashboard from "@/pages/Dashboard";
+import Usuarios from "@/pages/Usuarios"; // --- ADICIONAR ESTA LINHA ---
 
 const queryClient = new QueryClient();
 
@@ -29,7 +29,6 @@ function App() {
             <Routes>
               <Route path="/login" element={<Auth />} />
               
-              {/* NOVO: Rota para o Dashboard (Reativada) */}
               <Route 
                 path="/dashboard" 
                 element={
@@ -79,6 +78,18 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+
+              {/* --- ADICIONAR ESTA ROTA --- */}
+              <Route
+                path="/usuarios"
+                element={
+                  <ProtectedRoute>
+                    <Usuarios />
+                  </ProtectedRoute>
+                }
+              />
+              {/* --- FIM DA ADIÇÃO --- */}
+
               <Route path="*" element={<NotFound />} />
             </Routes>
             <Toaster richColors />
