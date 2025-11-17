@@ -9,14 +9,11 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "13.0.5"
   }
   public: {
     Tables: {
-      // --- TABELA ATUALIZADA ---
       controle_abastecimento: {
         Row: {
           ano: number
@@ -33,10 +30,11 @@ export type Database = {
           updated_at: string
           valor_reais: number
           veiculo: string
-          // --- ADIÇÕES (Odômetro) ---
           odometro: number | null
           km_percorridos: number | null
           media_km_l: number | null
+          // --- NOVO CAMPO ---
+          posto: string | null
         }
         Insert: {
           ano: number
@@ -53,10 +51,11 @@ export type Database = {
           updated_at?: string
           valor_reais: number
           veiculo: string
-          // --- ADIÇÕES (Odômetro) ---
           odometro?: number | null
           km_percorridos?: number | null
           media_km_l?: number | null
+          // --- NOVO CAMPO ---
+          posto?: string | null
         }
         Update: {
           ano?: number
@@ -73,14 +72,14 @@ export type Database = {
           updated_at?: string
           valor_reais?: number
           veiculo?: string
-          // --- ADIÇÕES (Odômetro) ---
           odometro?: number | null
           km_percorridos?: number | null
           media_km_l?: number | null
+          // --- NOVO CAMPO ---
+          posto?: string | null
         }
         Relationships: []
       }
-      // --- FIM DA ATUALIZAÇÃO ---
 
       manutencoes: {
         Row: {
@@ -98,7 +97,6 @@ export type Database = {
           status: Database["public"]["Enums"]["status_manutencao"]
           tipo_veiculo: string
           updated_at: string
-          // --- ADIÇÕES (NF) ---
           nf_numero: string | null
           nf_data: string | null
           nf_fornecedor: string | null
@@ -118,7 +116,6 @@ export type Database = {
           status?: Database["public"]["Enums"]["status_manutencao"]
           tipo_veiculo: string
           updated_at?: string
-          // --- ADIÇÕES (NF) ---
           nf_numero?: string | null
           nf_data?: string | null
           nf_fornecedor?: string | null
@@ -138,7 +135,6 @@ export type Database = {
           status?: Database["public"]["Enums"]["status_manutencao"]
           tipo_veiculo?: string
           updated_at?: string
-          // --- ADIÇÕES (NF) ---
           nf_numero?: string | null
           nf_data?: string | null
           nf_fornecedor?: string | null
@@ -156,7 +152,6 @@ export type Database = {
           placa: string
           status: Database["public"]["Enums"]["status_type"]
           updated_at: string
-          // --- ADIÇÃO (Combustível) ---
           tipo_combustivel: string
         }
         Insert: {
@@ -169,7 +164,6 @@ export type Database = {
           placa: string
           status?: Database["public"]["Enums"]["status_type"]
           updated_at?: string
-          // --- ADIÇÃO (Combustível) ---
           tipo_combustivel: string
         }
         Update: {
@@ -182,7 +176,6 @@ export type Database = {
           placa?: string
           status?: Database["public"]["Enums"]["status_type"]
           updated_at?: string
-          // --- ADIÇÃO (Combustível) ---
           tipo_combustivel?: string
         }
         Relationships: []
@@ -273,7 +266,6 @@ export type Database = {
           placa: string
           status: Database["public"]["Enums"]["status_type"]
           updated_at: string
-          // --- ADIÇÃO (Combustível) ---
           tipo_combustivel: string
         }
         Insert: {
@@ -286,7 +278,6 @@ export type Database = {
           placa: string
           status?: Database["public"]["Enums"]["status_type"]
           updated_at?: string
-          // --- ADIÇÃO (Combustível) ---
           tipo_combustivel: string
         }
         Update: {
@@ -299,10 +290,86 @@ export type Database = {
           placa?: string
           status?: Database["public"]["Enums"]["status_type"]
           updated_at?: string
-          // --- ADIÇÃO (Combustível) ---
           tipo_combustivel?: string
         }
         Relationships: []
+      }
+      tanques: {
+        Row: {
+          id: string
+          nome: string
+          capacidade_litros: number
+          litros_atuais: number
+          tipo_combustivel: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          nome: string
+          capacidade_litros: number
+          litros_atuais?: number
+          tipo_combustivel: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          nome?: string
+          capacidade_litros?: number
+          litros_atuais?: number
+          tipo_combustivel?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tanque_movimentacoes: {
+        Row: {
+          id: string
+          tanque_id: string
+          tipo: "entrada" | "saida"
+          litros: number
+          valor_reais: number | null
+          data: string
+          responsavel_id: string | null
+          responsavel_nome: string | null
+          observacao: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          tanque_id: string
+          tipo: "entrada" | "saida"
+          litros: number
+          valor_reais?: number | null
+          data?: string
+          responsavel_id?: string | null
+          responsavel_nome?: string | null
+          observacao?: string | null
+          created_at?: string
+        }
+        Update: {
+          // Geralmente não se atualiza histórico, mas fica aqui para tipagem completa
+          id?: string
+          tanque_id?: string
+          tipo?: "entrada" | "saida"
+          litros?: number
+          valor_reais?: number | null
+          data?: string
+          responsavel_id?: string | null
+          responsavel_nome?: string | null
+          observacao?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tanque_movimentacoes_tanque_id_fkey"
+            columns: ["tanque_id"]
+            referencedRelation: "tanques"
+            referencedColumns: ["id"]
+          }
+        ]
       }
     }
     Views: {
@@ -323,6 +390,22 @@ export type Database = {
         Returns: boolean
       }
       is_admin_or_coordinator: { Args: { _user_id: string }; Returns: boolean }
+      recalcular_medias_veiculo: { Args: { placa_veiculo: string }; Returns: void }
+      get_users_with_roles: {
+        Args: {
+          p_search_term: string
+          p_page_limit: number
+          p_page_offset: number
+        }
+        Returns: {
+          id: string
+          user_id: string
+          nome: string
+          email: string
+          user_role: Database["public"]["Enums"]["app_role"]
+          total_count: number
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "coordenador" | "usuario"
