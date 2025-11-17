@@ -5,14 +5,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Pie, PieChart, Cell } from "recharts";
-import { ListSkeleton } from "@/components/ListSkeleton"; // Reutilizamos o skeleton
+import { ListSkeleton } from "@/components/ListSkeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-// --- ADIÇÃO DE ÍCONE ---
 import { TrendingUp } from "lucide-react"; 
-
-// --- Tipos de Dados para o Dashboard ---
 
 interface GastoMes {
   mes: number;
@@ -23,21 +20,26 @@ interface GastoMes {
 interface GastoVeiculo {
   nome: string;
   total: number;
-  fill: string; // Cor adicionada pela função de fetch
+  fill: string;
 }
 
-// --- INTERFACE ATUALIZADA ---
+// --- NOVA INTERFACE ---
+interface GastoPosto {
+  nome: string;
+  total: number;
+  fill: string;
+}
+
 interface DashboardData {
   total_gasto_ano: number;
   total_litros_ano: number;
   gasto_medio_por_litro: number;
-  media_km_l_frota: number; // Novo campo
+  media_km_l_frota: number;
   gastos_por_mes: GastoMes[];
   gastos_por_veiculo: GastoVeiculo[];
-  // Removido: total_registros_ano (substituído pela média)
+  // --- NOVO CAMPO ---
+  gastos_por_posto: GastoPosto[];
 }
-
-// --- Função de Fetch (RPC) ---
 
 const fetchDashboardData = async (ano: number): Promise<DashboardData> => {
   const { data, error } = await supabase.rpc("get_dashboard_stats", {
@@ -49,17 +51,25 @@ const fetchDashboardData = async (ano: number): Promise<DashboardData> => {
   }
   
   const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8", "#FA8072", "#E0FFFF", "#D2691E", "#FF7F50", "#6495ED"];
+  const COLORS_POSTO = ["#FF8042", "#0088FE"]; // Laranja e Azul para os postos
 
   const gastosPorVeiculoComCores = data.gastos_por_veiculo?.map((item: GastoVeiculo, index: number) => ({
     ...item,
     fill: COLORS[index % COLORS.length],
   })) || [];
 
+  // --- NOVO MAPEAMENTO PARA POSTOS ---
+  const gastosPorPostoComCores = data.gastos_por_posto?.map((item: GastoPosto, index: number) => ({
+    ...item,
+    fill: COLORS_POSTO[index % COLORS_POSTO.length],
+  })) || [];
 
-  return { ...data, gastos_por_veiculo: gastosPorVeiculoComCores };
+  return { 
+    ...data, 
+    gastos_por_veiculo: gastosPorVeiculoComCores,
+    gastos_por_posto: gastosPorPostoComCores 
+  };
 };
-
-// --- Configuração dos Gráficos ---
 
 const chartConfigBar: ChartConfig = {
   total: {
@@ -83,7 +93,6 @@ export default function Dashboard() {
     queryFn: () => fetchDashboardData(currentYear),
   });
 
-  // Gera uma lista de anos (ano atual + 5 anos passados)
   const years = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i);
 
   if (isLoading) {
@@ -118,7 +127,6 @@ export default function Dashboard() {
   return (
     <Layout>
       <div className="space-y-6">
-        {/* --- Cabeçalho e Seletor de Ano --- */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
@@ -143,7 +151,6 @@ export default function Dashboard() {
           </Select>
         </div>
 
-        {/* --- Stats Rápidos (Kpis) --- ATUALIZADO --- */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -185,7 +192,6 @@ export default function Dashboard() {
             </CardContent>
           </Card>
           
-          {/* --- CARTÃO SUBSTITUÍDO --- */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Média da Frota (Km/L)</CardTitle>
@@ -199,13 +205,11 @@ export default function Dashboard() {
               </div>
             </CardContent>
           </Card>
-          {/* --- FIM DA SUBSTITUIÇÃO --- */}
         </div>
         
-        {/* --- Gráficos (Sem alterações) --- */}
         <div className="grid gap-6 md:grid-cols-2">
           {/* Gráfico de Barras: Gasto Mensal */}
-          <Card>
+          <Card className="col-span-2 lg:col-span-1">
             <CardHeader>
               <CardTitle>Gastos Mensais (R$)</CardTitle>
               <CardDescription>Total gasto em combustível por mês</CardDescription>
@@ -235,42 +239,78 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Gráfico de Pizza: Gasto por Veículo */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Top 10: Gastos por Veículo</CardTitle>
-              <CardDescription>Veículos com maior gasto no ano</CardDescription>
-            </CardHeader>
-            <CardContent className="flex justify-center">
-              <ChartContainer config={chartConfigPie} className="h-[300px] w-full max-w-sm">
-                <PieChart>
-                  <ChartTooltip
-                    content={<ChartTooltipContent 
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-1 lg:grid-rows-2">
+             {/* Gráfico de Pizza: Gasto por Veículo */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Top 10: Gastos por Veículo</CardTitle>
+                <CardDescription>Veículos com maior gasto</CardDescription>
+              </CardHeader>
+              <CardContent className="flex justify-center">
+                <ChartContainer config={chartConfigPie} className="h-[250px] w-full">
+                  <PieChart>
+                    <ChartTooltip
+                      content={<ChartTooltipContent 
+                        nameKey="nome"
+                        formatter={(value) => `R$ ${value.toLocaleString('pt-BR')}`}
+                        hideLabel
+                      />}
+                    />
+                    <Pie
+                      data={stats.gastos_por_veiculo}
+                      dataKey="total"
                       nameKey="nome"
-                      formatter={(value) => `R$ ${value.toLocaleString('pt-BR')}`}
-                      hideLabel
-                    />}
-                  />
-                  <Pie
-                    data={stats.gastos_por_veiculo}
-                    dataKey="total"
-                    nameKey="nome"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={100}
-                    label={({ nome, percent }) => `${nome} (${(percent * 100).toFixed(0)}%)`}
-                    labelLine={false}
-                    fontSize={12}
-                  >
-                    {stats.gastos_por_veiculo.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.fill} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ChartContainer>
-            </CardContent>
-          </Card>
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={2}
+                    >
+                      {stats.gastos_por_veiculo.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ChartContainer>
+              </CardContent>
+            </Card>
 
+            {/* NOVO: Gráfico de Pizza: Gasto por Posto */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Gastos por Posto</CardTitle>
+                <CardDescription>Comparativo entre postos</CardDescription>
+              </CardHeader>
+              <CardContent className="flex justify-center">
+                <ChartContainer config={chartConfigPie} className="h-[250px] w-full">
+                  <PieChart>
+                    <ChartTooltip
+                      content={<ChartTooltipContent 
+                        nameKey="nome"
+                        formatter={(value) => `R$ ${value.toLocaleString('pt-BR')}`}
+                        hideLabel
+                      />}
+                    />
+                    <Pie
+                      data={stats.gastos_por_posto}
+                      dataKey="total"
+                      nameKey="nome"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                    >
+                      {stats.gastos_por_posto.map((entry, index) => (
+                        <Cell key={`cell-posto-${index}`} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <ChartLegend content={<ChartLegendContent />} />
+                  </PieChart>
+                </ChartContainer>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </Layout>
