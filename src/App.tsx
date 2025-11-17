@@ -1,108 +1,134 @@
 // src/App.tsx
 
+import { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
-import { toast } from "sonner"; // Importe o toast
-
-import Auth from "@/pages/Auth";
-import ControleAbastecimento from "@/pages/ControleAbastecimento";
-import Motoristas from "@/pages/Motoristas";
-import Viaturas from "@/pages/Viaturas";
-import Maquinario from "@/pages/Maquinario";
-import Manutencao from "@/pages/Manutencao";
-import NotFound from "@/pages/NotFound";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { ListSkeleton } from "@/components/ListSkeleton";
 
-import Dashboard from "@/pages/Dashboard";
-import Usuarios from "@/pages/Usuarios"; 
-// --- ADICIONE ESTA NOVA PÁGINA ---
-import TanqueCombustivel from "@/pages/TanqueCombustivel";
+// --- IMPORTAÇÕES PREGUIÇOSAS (Lazy Loading) ---
+const Auth = lazy(() => import("@/pages/Auth"));
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const ControleAbastecimento = lazy(() => import("@/pages/ControleAbastecimento"));
+const TanqueCombustivel = lazy(() => import("@/pages/TanqueCombustivel"));
+const Motoristas = lazy(() => import("@/pages/Motoristas"));
+const Viaturas = lazy(() => import("@/pages/Viaturas"));
+const Maquinario = lazy(() => import("@/pages/Maquinario"));
+const Manutencao = lazy(() => import("@/pages/Manutencao"));
+const Usuarios = lazy(() => import("@/pages/Usuarios"));
+const NotFound = lazy(() => import("@/pages/NotFound"));
 
-const queryClient = new QueryClient();
+// --- CONFIGURAÇÃO DO REACT QUERY ---
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutos de cache
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <BrowserRouter>
+        {/* Adicionamos as flags 'future' para remover os avisos do console */}
+        <BrowserRouter
+          future={{
+            v7_startTransition: true,
+            v7_relativeSplatPath: true,
+          }}
+        >
           <AuthProvider>
-            <Routes>
-              <Route path="/login" element={<Auth />} />
-              
-              <Route 
-                path="/dashboard" 
-                element={
-                  <ProtectedRoute>
-                    <Dashboard />
-                  </ProtectedRoute>
-                } 
-              />
-              
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <ControleAbastecimento />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/motoristas"
-                element={
-                  <ProtectedRoute allowedRoles={["admin", "coordenador"]}>
-                    <Motoristas />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/viaturas"
-                element={
-                  <ProtectedRoute>
-                    <Viaturas />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/maquinario"
-                element={
-                  <ProtectedRoute>
-                    <Maquinario />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/manutencao"
-                element={
-                  <ProtectedRoute>
-                    <Manutencao />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/usuarios"
-                element={
-                  <ProtectedRoute allowedRoles={["admin"]}>
-                    <Usuarios />
-                  </ProtectedRoute>
-                }
-              />
+            <Suspense 
+              fallback={
+                <div className="container mx-auto p-8 space-y-4">
+                  <ListSkeleton />
+                </div>
+              }
+            >
+              <Routes>
+                <Route path="/login" element={<Auth />} />
+                
+                <Route 
+                  path="/dashboard" 
+                  element={
+                    <ProtectedRoute>
+                      <Dashboard />
+                    </ProtectedRoute>
+                  } 
+                />
+                
+                <Route
+                  path="/"
+                  element={
+                    <ProtectedRoute>
+                      <ControleAbastecimento />
+                    </ProtectedRoute>
+                  }
+                />
 
-              {/* --- ADICIONE ESTA NOVA ROTA --- */}
-              <Route
-                path="/tanque"
-                element={
-                  <ProtectedRoute>
-                    <TanqueCombustivel />
-                  </ProtectedRoute>
-                }
-              />
-              {/* --- FIM DA ADIÇÃO --- */}
+                <Route
+                  path="/tanque"
+                  element={
+                    <ProtectedRoute>
+                      <TanqueCombustivel />
+                    </ProtectedRoute>
+                  }
+                />
 
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+                <Route
+                  path="/motoristas"
+                  element={
+                    <ProtectedRoute allowedRoles={["admin", "coordenador"]}>
+                      <Motoristas />
+                    </ProtectedRoute>
+                  }
+                />
+                
+                <Route
+                  path="/viaturas"
+                  element={
+                    <ProtectedRoute>
+                      <Viaturas />
+                    </ProtectedRoute>
+                  }
+                />
+                
+                <Route
+                  path="/maquinario"
+                  element={
+                    <ProtectedRoute>
+                      <Maquinario />
+                    </ProtectedRoute>
+                  }
+                />
+                
+                <Route
+                  path="/manutencao"
+                  element={
+                    <ProtectedRoute>
+                      <Manutencao />
+                    </ProtectedRoute>
+                  }
+                />
+                
+                <Route
+                  path="/usuarios"
+                  element={
+                    <ProtectedRoute allowedRoles={["admin"]}>
+                      <Usuarios />
+                    </ProtectedRoute>
+                  }
+                />
+
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
             <Toaster richColors />
           </AuthProvider>
         </BrowserRouter>

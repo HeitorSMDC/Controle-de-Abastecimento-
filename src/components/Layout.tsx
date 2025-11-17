@@ -4,9 +4,10 @@ import { useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-// --- ÍCONE ADICIONADO (Droplet) ---
 import { LogOut, Car, Truck, Users, Gauge, Wrench, Menu, LayoutDashboard, ShieldCheck, Droplet } from "lucide-react";
-import logo from "@/assets/defesa-civil-logo.png";
+
+// Verifica se este ficheiro existe mesmo nesta pasta
+import logo from "@/assets/defesa-civil-logo.png"; 
 
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetClose, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -35,14 +36,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
       icon: Gauge,
       show: true,
     },
-    // --- NOVO LINK ADICIONADO ---
     {
       to: "/tanque",
       label: "Tanque",
-      icon: Droplet, // Ícone da gota
-      show: true,    // Mostrar para todos por enquanto
+      icon: Droplet,
+      show: true,
     },
-    // --- FIM DA ADIÇÃO ---
     {
       to: "/motoristas",
       label: "Motoristas",
@@ -64,14 +63,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
     setIsMobileMenuOpen(false);
   }, [location.pathname]);
 
-  // (O resto do arquivo 'Layout.tsx' não precisa de alterações)
-  // ... (cole o restante do seu arquivo Layout.tsx aqui)
-  // ...
   const renderNavLinks = (isMobileLink = false) => {
     return navLinks
       .filter((link) => link.show)
       .map((link) => {
-        
         const isEnd = link.to === "/"; 
         
         const linkContent = (
@@ -129,7 +124,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </div>
 
             {isMobile ? (
-              // --- VISTA MOBILE ---
               <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
                 <SheetTrigger asChild>
                   <Button variant="outline" size="icon">
@@ -163,7 +157,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </SheetContent>
               </Sheet>
             ) : (
-              // --- VISTA DESKTOP ---
               <Button variant="outline" onClick={signOut} size="sm">
                 <LogOut className="mr-2 h-4 w-4" />
                 Sair
