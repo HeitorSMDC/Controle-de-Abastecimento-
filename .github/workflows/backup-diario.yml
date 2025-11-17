@@ -1,0 +1,51 @@
+name: Backup Seguro para Google Drive
+
+# Executa todos os dias às 03:00 da manhã (hora UTC)
+# OU quando clicares no botão "Run workflow" manualmente
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    name: Realizar Backup e Upload
+    
+    steps:
+      # 1. Baixa o código do repositório (necessário para o ambiente)
+      - uses: actions/checkout@v4
+
+      # 2. Instala a ferramenta para 'falar' com o banco de dados PostgreSQL
+      - name: Instalar Ferramentas PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      # 3. Faz o download dos dados (Dump)
+      - name: Criar Backup SQL
+        run: |
+          # Cria um nome de ficheiro com a data de hoje (ex: backup-2025-11-17.sql)
+          FILENAME="backup-$(date +%Y-%m-%d).sql"
+          echo "FILENAME=$FILENAME" >> $GITHUB_ENV
+          
+          # Comando pg_dump para extrair tudo do Supabase
+          pg_dump "$SUPABASE_DB_URL" \
+            --clean \
+            --if-exists \
+            --quote-all-identifiers \
+            --no-owner \
+            --no-privileges \
+            --file="$FILENAME"
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
+      # 4. Envia o ficheiro para o Google Drive usando as tuas credenciais
+      - name: Upload para o Google Drive
+        uses: adityak74/google-drive-upload-git-action@main
+        with:
+          credentials: ${{ secrets.GDRIVE_CREDENTIALS }}
+          filename: ${{ env.FILENAME }}
+          folderId: ${{ secrets.GDRIVE_FOLDER_ID }}
+          name: ${{ env.FILENAME }} # Nome que vai aparecer no Drive
+          overwrite: "false"
