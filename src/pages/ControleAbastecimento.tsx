@@ -6,11 +6,11 @@ import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Gauge, Search, TrendingUp, DollarSign } from "lucide-react";
+import { Plus, Pencil, Trash2, Gauge, Search } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 import { useForm } from "react-hook-form";
@@ -45,7 +45,6 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { AbastecimentoCard } from "@/components/cards/AbastecimentoCard";
 import { ListSkeleton } from "@/components/ListSkeleton";
 
-// (As interfaces VeiculoSelecao, MotoristaSelecao, Abastecimento não mudam)
 interface VeiculoSelecao {
   placa: string;
   nome: string;
@@ -71,9 +70,10 @@ interface Abastecimento {
   odometro: number | null;
   km_percorridos: number | null;
   media_km_l: number | null;
+  // --- NOVO CAMPO ---
+  posto: string | null;
 }
 
-// (Funções getWeekNumber, fetchAbastecimentos, fetchViaturas, fetchMaquinarios, fetchMotoristas não mudam)
 const getWeekNumber = (date: Date): number => {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   const dayNum = d.getUTCDay() || 7;
@@ -110,7 +110,6 @@ const fetchMotoristas = async () => {
   return (data as MotoristaSelecao[]) || [];
 };
 
-
 export default function ControleAbastecimento() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -136,10 +135,10 @@ export default function ControleAbastecimento() {
       quantidade_litros: 0,
       valor_reais: 0,
       odometro: 0,
+      posto: "Posto Rota 28", // Valor padrão
     },
   });
   
-  // (Lógica de cálculo automático do Valor Unitário - SEM ALTERAÇÕES)
   const watchLitros = form.watch("quantidade_litros");
   const watchValorTotal = form.watch("valor_reais");
 
@@ -147,7 +146,6 @@ export default function ControleAbastecimento() {
     if (watchLitros > 0 && watchValorTotal > 0) {
       setValorUnitario(watchValorTotal / watchLitros);
     } else if (watchLitros === 0 && watchValorTotal === 0) {
-      // Se ambos forem resetados, reseta o valor unitário
       if (valorUnitario !== 0) setValorUnitario(0);
     }
   }, [watchLitros, watchValorTotal, valorUnitario]);
@@ -167,8 +165,6 @@ export default function ControleAbastecimento() {
       form.setValue("valor_reais", litros * valorUnitario, { shouldValidate: true });
     }
   };
-  // (Fim da lógica do Valor Unitário)
-
 
   const { data, isLoading } = useQuery<Abastecimento[]>({
     queryKey: ["abastecimentos", selectedMonth, selectedYear],
@@ -192,7 +188,6 @@ export default function ControleAbastecimento() {
 
   const veiculosList = useMemo(() => [...viaturas, ...maquinarios].sort((a, b) => a.nome.localeCompare(b.nome)), [viaturas, maquinarios]);
 
-  // --- MUTATION SALVAR ATUALIZADA ---
   const { mutate: salvarAbastecimento, isPending: isSaving } = useMutation({
     mutationFn: async (data: AbastecimentoFormData) => {
       const { data: validatedData, error: zodError } = abastecimentoSchema.safeParse(data);
@@ -204,15 +199,12 @@ export default function ControleAbastecimento() {
       const dataObj = new Date(ano, mes - 1, dia);
       const semana = getWeekNumber(dataObj);
 
-      // --- REMOVEMOS O CÁLCULO CLIENT-SIDE DAQUI ---
-
       const record = {
         ...validatedData,
         ano,
         mes,
         semana,
         odometro: validatedData.odometro,
-        // km_percorridos e media_km_l serão definidos pela função SQL
       };
 
       let response;
@@ -222,14 +214,12 @@ export default function ControleAbastecimento() {
           .update(record)
           .eq("id", editingId);
       } else {
-        // Ao inserir, não definimos km_percorridos ou media_km_l
         response = await supabase.from("controle_abastecimento").insert(record);
       }
 
       const { error } = response;
       if (error) throw error;
       
-      // Retornamos a placa para usar no onSuccess
       return { 
         message: editingId ? "Registro atualizado com sucesso!" : "Registro salvo com sucesso!",
         placa: validatedData.placa
@@ -238,34 +228,25 @@ export default function ControleAbastecimento() {
     onSuccess: ({ message, placa }) => {
       toast.success(message);
       
-      // --- LÓGICA DE RECALCULAR (RPC) ---
-      // Disparamos o recálculo na base de dados em segundo plano
       supabase.rpc('recalcular_medias_veiculo', { placa_veiculo: placa })
         .then(({ error }) => {
           if (error) {
             console.error("Erro ao recalcular médias:", error.message);
-            // Opcional: notificar o utilizador que o recálculo falhou
-            // toast.error("Falha ao recalcular médias automáticas.");
           }
         });
-      // --- FIM DA LÓGICA RPC ---
 
       setIsDialogOpen(false);
       resetForm();
-      // Invalida as queries para forçar o recarregamento dos dados
       queryClient.invalidateQueries({ queryKey: ["abastecimentos"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] }); // Invalida o dashboard
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: (error: any) => {
       toast.error(error.message || "Erro ao salvar registro");
     },
   });
-  // --- FIM DA MUTATION SALVAR ---
-
 
   const { mutate: deletarAbastecimento } = useMutation({
     mutationFn: async (id: string) => {
-      // --- ATUALIZADO: Precisamos da placa ANTES de deletar ---
       const { data: registro } = await supabase
         .from("controle_abastecimento")
         .select("placa")
@@ -283,23 +264,20 @@ export default function ControleAbastecimento() {
     onSuccess: ({ message, placa }) => {
       toast.success(message);
       
-      // --- LÓGICA DE RECALCULAR (RPC) ---
       if (placa) {
         supabase.rpc('recalcular_medias_veiculo', { placa_veiculo: placa })
           .then(({ error }) => {
             if (error) console.error("Erro ao recalcular médias após deleção:", error.message);
           });
       }
-      // --- FIM DA LÓGICA RPC ---
       
       queryClient.invalidateQueries({ queryKey: ["abastecimentos"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] }); // Invalida o dashboard
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: (error: any) => {
       toast.error(error.message || "Erro ao excluir registro");
     },
   });
-
 
   const onSubmit = (data: AbastecimentoFormData) => {
     salvarAbastecimento(data);
@@ -316,6 +294,7 @@ export default function ControleAbastecimento() {
       quantidade_litros: 0,
       valor_reais: 0,
       odometro: 0,
+      posto: "Posto Rota 28",
     });
     setEditingId(null);
     setValorUnitario(0);
@@ -326,6 +305,7 @@ export default function ControleAbastecimento() {
       ...abastecimento,
       cartao: abastecimento.cartao || "",
       odometro: abastecimento.odometro || 0,
+      posto: (abastecimento.posto as "Posto Rota 28" | "Posto Universo") || "Posto Rota 28",
     });
     
     if (abastecimento.quantidade_litros > 0 && abastecimento.valor_reais > 0) {
@@ -338,7 +318,6 @@ export default function ControleAbastecimento() {
     setIsDialogOpen(true);
   };
 
-  // (handleVeiculoChange, handleMotoristaChange, canDelete, filteredAbastecimentos, weeklyTotals, monthTotal - SEM ALTERAÇÕES)
   const handleVeiculoChange = (placa: string) => {
     const veiculoSelecionado = veiculosList.find(v => v.placa === placa);
     if (veiculoSelecionado) {
@@ -407,11 +386,7 @@ export default function ControleAbastecimento() {
     );
   }, [abastecimentos]);
 
-  
-  // (renderContent e o JSX principal - SEM ALTERAÇÕES)
-  // ... (Cole o restante do seu arquivo `ControleAbastecimento.tsx` daqui para baixo)
-  // ... (O JSX do `renderContent` e do `return` principal)
-    const renderContent = () => {
+  const renderContent = () => {
     if (isLoading) {
       return <ListSkeleton />;
     }
@@ -497,6 +472,7 @@ export default function ControleAbastecimento() {
               <TableHead>Veículo</TableHead>
               <TableHead>Placa</TableHead>
               <TableHead>Motorista</TableHead>
+              <TableHead>Posto</TableHead>
               <TableHead>Odômetro</TableHead>
               <TableHead>Litros</TableHead>
               <TableHead>Valor (R$)</TableHead>
@@ -516,6 +492,7 @@ export default function ControleAbastecimento() {
                 <TableCell className="font-medium">{abastecimento.veiculo}</TableCell>
                 <TableCell>{abastecimento.placa}</TableCell>
                 <TableCell>{abastecimento.motorista}</TableCell>
+                <TableCell>{abastecimento.posto}</TableCell>
                 <TableCell>{abastecimento.odometro || "-"}</TableCell>
                 <TableCell>{abastecimento.quantidade_litros.toFixed(2)} L</TableCell>
                 <TableCell>R$ {abastecimento.valor_reais.toFixed(2)}</TableCell>
@@ -796,6 +773,29 @@ export default function ControleAbastecimento() {
                     )}
                   />
                 </div>
+                
+                {/* --- SELETOR DE POSTO --- */}
+                <FormField
+                  control={form.control}
+                  name="posto"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Posto de Abastecimento</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione o posto" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Posto Rota 28">Posto Rota 28</SelectItem>
+                          <SelectItem value="Posto Universo">Posto Universo</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 <Button type="submit" className="w-full" disabled={isSaving}>
                   {isSaving
