@@ -1,13 +1,12 @@
 // src/components/GerenciadorDeVeiculos.tsx
 
-import { useState, useMemo, useEffect } from "react"; // Adicionado useEffect
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -50,7 +49,6 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { VeiculoCard } from "@/components/cards/VeiculoCard";
 import { ListSkeleton } from "@/components/ListSkeleton";
 
-// NOVO: Importar useDebounce e Pagination
 import { useDebounce } from "@/hooks/use-debounce";
 import {
   Pagination,
@@ -61,7 +59,6 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 
-// NOVO: Constante para itens por página
 const ITEMS_PER_PAGE = 10;
 
 interface Veiculo {
@@ -82,7 +79,6 @@ interface GerenciadorDeVeiculosProps {
   icon: LucideIcon;
 }
 
-// NOVO: fetchVeiculos agora aceita paginação e busca
 const fetchVeiculos = async (
   supabaseTable: "viaturas" | "maquinario",
   page: number,
@@ -93,16 +89,14 @@ const fetchVeiculos = async (
 
   let query = supabase
     .from(supabaseTable)
-    .select("*", { count: "exact" }); // Pede o 'count' total
+    .select("*", { count: "exact" });
 
-  // Se houver um termo de busca, filtra por nome, placa OU combustível
   if (searchTerm) {
     query = query.or(
       `nome.ilike.%${searchTerm}%,placa.ilike.%${searchTerm}%,tipo_combustivel.ilike.%${searchTerm}%`
     );
   }
 
-  // Aplica a ordem e a paginação
   query = query.order("nome").range(from, to);
 
   const { data, error, count } = await query;
@@ -125,7 +119,6 @@ export function GerenciadorDeVeiculos({
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
 
-  // NOVO: Estados para paginação e busca "atrasada"
   const [page, setPage] = useState(1);
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
@@ -142,50 +135,70 @@ export function GerenciadorDeVeiculos({
     },
   });
 
-  // NOVO: useQuery modificado. Agora depende da 'page' e 'debouncedSearchTerm'
   const { data, isLoading } = useQuery({
     queryKey: [supabaseTable, page, debouncedSearchTerm],
     queryFn: () => fetchVeiculos(supabaseTable, page, debouncedSearchTerm),
   });
   
-  // NOVO: Pega os dados e o 'count' do useQuery
   const veiculos: Veiculo[] = data?.data || [];
   const totalCount = data?.count || 0;
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
   
-  // REMOVIDO: O 'useMemo' para 'filteredVeiculos' foi removido.
-  
-  
   const { mutate: salvarVeiculo, isPending: isSaving } = useMutation({
     mutationFn: async (data: VeiculoFormData) => {
-      // ... (lógica da mutation - sem alterações) ...
+      // Adaptação para garantir que o ano é número e campos vazios viram null
+      const payload = {
+        ...data,
+        ano: Number(data.ano),
+        cartao: data.cartao || null,
+        anotacoes: data.anotacoes || null
+      };
+
+      let response;
+      if (editingId) {
+        response = await supabase
+          .from(supabaseTable)
+          .update(payload)
+          .eq("id", editingId);
+      } else {
+        response = await supabase
+          .from(supabaseTable)
+          .insert(payload);
+      }
+
+      if (response.error) throw response.error;
+      return response.data;
     },
-    onSuccess: (message) => {
-      toast.success(message);
+    onSuccess: () => {
+      toast.success(editingId ? `${itemNome} atualizado!` : `${itemNome} criado com sucesso!`);
       setIsDialogOpen(false); 
       resetForm();
-      // NOVO: Invalida a query base
       queryClient.invalidateQueries({ queryKey: [supabaseTable] });
     },
     onError: (error: any) => {
-      toast.error(error.message || `Erro ao salvar ${itemNome.toLowerCase()}`);
+      // Tratamento específico para erro de placa duplicada
+      if (error.code === '23505' && error.message.includes('placa_key')) {
+          toast.error("Erro: Já existe um veículo com esta placa.");
+      } else {
+          toast.error(error.message || `Erro ao salvar ${itemNome.toLowerCase()}`);
+      }
     },
   });
   
   const { mutate: deletarVeiculo } = useMutation({
     mutationFn: async (id: string) => {
-      // ... (lógica da mutation - sem alterações) ...
+      const { error } = await supabase.from(supabaseTable).delete().eq("id", id);
+      if (error) throw error;
     },
-    onSuccess: (message) => {
-      toast.success(message);
+    onSuccess: () => {
+      toast.success(`${itemNome} apagado com sucesso!`);
       queryClient.invalidateQueries({ queryKey: [supabaseTable] });
-      // NOVO: Se apagar o último item, volta a página
       if (veiculos.length === 1 && page > 1) {
         setPage(page - 1);
       }
     },
     onError: (error: any) => {
-      toast.error(`Erro ao excluir ${itemNome.toLowerCase()}`);
+      toast.error(error.message || `Erro ao excluir ${itemNome.toLowerCase()}`);
     },
   });
 
@@ -220,14 +233,12 @@ export function GerenciadorDeVeiculos({
     setIsDialogOpen(true);
   };
 
-  // NOVO: Funções para mudar de página
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages) {
       setPage(newPage);
     }
   };
   
-  // NOVO: Quando a busca muda, volta para a página 1
   useEffect(() => {
     setPage(1);
   }, [debouncedSearchTerm]);
@@ -239,7 +250,6 @@ export function GerenciadorDeVeiculos({
       return <ListSkeleton />;
     }
     
-    // NOVO: Lógica de EmptyState atualizada
     if (totalCount === 0 && debouncedSearchTerm === "") {
       return (
          <EmptyState
@@ -263,7 +273,6 @@ export function GerenciadorDeVeiculos({
       );
     }
     
-    // NOVO: O conteúdo principal (mobile ou desktop)
     const listContent = isMobile ? (
       <div className="space-y-4 p-4">
         {veiculos.map((veiculo) => (
@@ -381,7 +390,6 @@ export function GerenciadorDeVeiculos({
       </Table>
     );
 
-    // NOVO: Retorna o conteúdo E a paginação
     return (
       <>
         {listContent}
@@ -434,6 +442,7 @@ export function GerenciadorDeVeiculos({
           open={isDialogOpen}
           onOpenChange={setIsDialogOpen}
           title={editingId ? `Editar ${itemNome}` : `Novo ${itemNome}`}
+          description={`Preencha os detalhes para ${editingId ? 'editar' : 'adicionar'} um ${itemNome.toLowerCase()}.`} // --- LINHA CORRIGIDA ---
           className="max-w-2xl"
           trigger={
             <Button onClick={resetForm}>
