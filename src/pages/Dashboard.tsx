@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { TrendingUp, X } from "lucide-react"; 
 import { Button } from "@/components/ui/button";
 import { combustivelOptions } from "@/lib/constants";
+import { formatCurrency, formatNumber } from "@/lib/formatters";
 
 // --- Interfaces ---
 interface GastoMes { mes: number; mes_nome: string; total: number; }
@@ -43,8 +44,6 @@ const fetchDashboardData = async (filters: Filters): Promise<DashboardData> => {
     p_placa: filters.placa === "all" ? null : filters.placa,
     p_posto: filters.posto === "all" ? null : filters.posto,
   };
-
-  console.log("A enviar para RPC:", params); // Para debug
 
   const { data, error } = await supabase.rpc("get_dashboard_stats", params);
 
@@ -85,15 +84,12 @@ const fetchDashboardData = async (filters: Filters): Promise<DashboardData> => {
 const fetchFilterOptions = async () => {
   const [veiculos, postos] = await Promise.all([
     supabase.from("viaturas").select("placa, nome").order("nome"),
-    supabase.from("controle_abastecimento").select("posto").not("posto", "is", null).order("posto"),
+    supabase.from("postos").select("nome").order("nome"), 
   ]);
-  
-  // Remove duplicados dos postos e valores nulos
-  const uniquePostos = Array.from(new Set(postos.data?.map(p => p.posto))).filter(Boolean);
   
   return {
     veiculos: veiculos.data || [],
-    postos: uniquePostos
+    postos: postos.data || [] 
   };
 };
 
@@ -102,10 +98,17 @@ const chartConfig: ChartConfig = {
 };
 
 export default function Dashboard() {
-  const currentYear = new Date().getFullYear().toString();
+  const currentYear = new Date().getFullYear();
+  const startYear = 2025; // Ano de início do projeto
   
+  // Gera lista de anos do atual até 2025
+  const yearsList = Array.from(
+    { length: currentYear - startYear + 1 },
+    (_, i) => (currentYear - i).toString()
+  );
+
   const [filters, setFilters] = useState<Filters>({
-    ano: currentYear,
+    ano: currentYear.toString(),
     combustivel: "all",
     placa: "all",
     posto: "all"
@@ -128,7 +131,7 @@ export default function Dashboard() {
 
   const clearFilters = () => {
     setFilters({
-      ano: currentYear,
+      ano: currentYear.toString(),
       combustivel: "all",
       placa: "all",
       posto: "all"
@@ -181,10 +184,9 @@ export default function Dashboard() {
                 <Select value={filters.ano} onValueChange={(v) => handleFilterChange("ano", v)}>
                   <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {[0,1,2,3,4].map(i => {
-                      const year = (new Date().getFullYear() - i).toString();
-                      return <SelectItem key={year} value={year}>{year}</SelectItem>;
-                    })}
+                    {yearsList.map(year => (
+                      <SelectItem key={year} value={year}>{year}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -221,8 +223,8 @@ export default function Dashboard() {
                   <SelectTrigger className="bg-background"><SelectValue placeholder="Todos" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos os Postos</SelectItem>
-                    {options?.postos.map((posto: any) => (
-                      <SelectItem key={posto} value={posto}>{posto}</SelectItem>
+                    {options?.postos.map((p: any) => (
+                      <SelectItem key={p.nome} value={p.nome}>{p.nome}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -234,10 +236,10 @@ export default function Dashboard() {
 
         {/* --- KPIs --- */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <KpiCard title="Total Gasto" value={`R$ ${stats.total_gasto_ano.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`} icon="R$" color="text-primary" />
-          <KpiCard title="Total Consumido" value={`${stats.total_litros_ano.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} L`} icon="L" color="text-blue-500" />
-          <KpiCard title="Preço Médio/Litro" value={`R$ ${stats.gasto_medio_por_litro.toLocaleString("pt-BR", { minimumFractionDigits: 3 })}`} icon="Avg" color="text-muted-foreground" />
-          <KpiCard title="Média Frota (Km/L)" value={stats.media_km_l_frota.toFixed(2)} icon={<TrendingUp className="h-5 w-5" />} color="text-green-600" />
+          <KpiCard title="Total Gasto" value={formatCurrency(stats.total_gasto_ano)} icon="R$" color="text-primary" />
+          <KpiCard title="Total Consumido" value={`${formatNumber(stats.total_litros_ano)} L`} icon="L" color="text-blue-500" />
+          <KpiCard title="Preço Médio/Litro" value={formatCurrency(stats.gasto_medio_por_litro)} icon="Avg" color="text-muted-foreground" />
+          <KpiCard title="Média Frota (Km/L)" value={formatNumber(stats.media_km_l_frota)} icon={<TrendingUp className="h-5 w-5" />} color="text-green-600" />
         </div>
         
         {/* --- Gráficos --- */}
@@ -267,7 +269,7 @@ export default function Dashboard() {
                     tickLine={false}
                     width={80}
                   />
-                  <ChartTooltip cursor={false} content={<ChartTooltipContent formatter={(value) => `R$ ${Number(value).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`} />} />
+                  <ChartTooltip cursor={false} content={<ChartTooltipContent formatter={(value) => formatCurrency(Number(value))} />} />
                   <Bar dataKey="total" fill="var(--color-total)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ChartContainer>
@@ -284,7 +286,7 @@ export default function Dashboard() {
                 {stats.gastos_por_veiculo.length > 0 ? (
                   <ChartContainer config={{}} className="h-full w-full">
                     <PieChart>
-                      <ChartTooltip content={<ChartTooltipContent hideLabel nameKey="nome" formatter={(value) => `R$ ${Number(value).toLocaleString('pt-BR')}`} />} />
+                      <ChartTooltip content={<ChartTooltipContent hideLabel nameKey="nome" formatter={(value) => formatCurrency(Number(value))} />} />
                       <Pie
                         data={stats.gastos_por_veiculo}
                         dataKey="total"
@@ -316,7 +318,7 @@ export default function Dashboard() {
                  {stats.gastos_por_posto.length > 0 ? (
                   <ChartContainer config={{}} className="h-full w-full">
                     <PieChart>
-                      <ChartTooltip content={<ChartTooltipContent hideLabel nameKey="nome" formatter={(value) => `R$ ${Number(value).toLocaleString('pt-BR')}`} />} />
+                      <ChartTooltip content={<ChartTooltipContent hideLabel nameKey="nome" formatter={(value) => formatCurrency(Number(value))} />} />
                       <Pie
                         data={stats.gastos_por_posto}
                         dataKey="total"

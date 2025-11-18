@@ -1,6 +1,6 @@
 // src/pages/Usuarios.tsx
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Layout } from "@/components/Layout";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label"; // Importar Label
 import { toast } from "sonner";
 import { Users, Search } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -28,19 +29,17 @@ import { useIsMobile } from "@/hooks/use-mobile";
 type AppRole = "admin" | "coordenador" | "usuario";
 const ROLES: AppRole[] = ["admin", "coordenador", "usuario"];
 
-// --- INTERFACE ATUALIZADA (para corresponder ao retorno do RPC) ---
 interface UsuarioComRole {
   id: string; // profile id
   user_id: string; // auth user id
   nome: string;
   email: string | null;
-  user_role: AppRole; // Alterado de "role" para "user_role"
-  total_count: number; // A função RPC devolve o total
+  user_role: AppRole;
+  total_count: number;
 }
 
 const ITEMS_PER_PAGE = 10;
 
-// --- FUNÇÃO DE FETCH CORRIGIDA (AGORA USA RPC) ---
 const fetchUsuarios = async (page: number, searchTerm: string) => {
   const from = (page - 1) * ITEMS_PER_PAGE;
   
@@ -52,26 +51,21 @@ const fetchUsuarios = async (page: number, searchTerm: string) => {
 
   if (error) {
     console.error("Erro ao buscar usuários:", error);
-    // O erro 400 (Bad Request) que estavas a ver vai agora mostrar esta mensagem mais útil
     if (error.message.includes("Acesso negado")) {
         throw new Error("Acesso negado. Apenas administradores podem ver os utilizadores.");
     }
     throw error;
   }
 
-  // O RPC retorna os dados. O 'count' está dentro do primeiro item.
   const totalCount = data.length > 0 ? data[0].total_count : 0;
-  
-  // O tipo de 'data' é o que a função retorna
   const mappedData = data as UsuarioComRole[];
 
   return { data: mappedData, count: totalCount };
 };
-// --- FIM DA CORREÇÃO ---
 
 export default function Usuarios() {
   const [searchTerm, setSearchTerm] = useState("");
-  const { user } = useAuth(); // Para não editar o próprio utilizador
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const [page, setPage] = useState(1);
@@ -95,7 +89,6 @@ export default function Usuarios() {
   // Mutação para ATUALIZAR a role de um utilizador
   const { mutate: updateUserRole, isPending: isUpdatingRole } = useMutation({
     mutationFn: async ({ userId, newRole }: { userId: string, newRole: AppRole }) => {
-      // A tabela 'user_roles' usa o user_id como chave de referência
       const { error } = await supabase
         .from("user_roles")
         .update({ role: newRole })
@@ -104,18 +97,11 @@ export default function Usuarios() {
       if (error) throw error;
       return { userId, newRole };
     },
-    onSuccess: ({ userId, newRole }) => {
+    onSuccess: ({ newRole }) => {
       toast.success(`Permissão atualizada para ${newRole}!`);
-      // Atualiza os dados na cache do React Query sem precisar de um novo fetch
-      queryClient.setQueryData(["usuarios", page, debouncedSearchTerm], (oldData: any) => {
-          if (!oldData) return oldData;
-          return {
-              ...oldData,
-              data: oldData.data.map((u: UsuarioComRole) => 
-                  u.user_id === userId ? { ...u, user_role: newRole } : u // Ajuste aqui
-              ),
-          };
-      });
+      // --- MELHORIA: INVALIDAR A QUERY ---
+      // Garante que os dados vêm sempre da fonte da verdade
+      queryClient.invalidateQueries({ queryKey: ["usuarios"] });
     },
     onError: (error: any) => {
       toast.error(error.message || "Erro ao atualizar permissão");
@@ -123,7 +109,6 @@ export default function Usuarios() {
   });
 
   const handleRoleChange = (userId: string, newRole: AppRole) => {
-    // Impede o admin de alterar a sua própria permissão (para evitar auto-bloqueio)
     if (userId === user?.id) {
       toast.error("Não pode alterar a sua própria permissão.");
       return;
@@ -141,7 +126,6 @@ export default function Usuarios() {
     setPage(1);
   }, [debouncedSearchTerm]);
 
-  // Se houver um erro (ex: acesso negado)
   if (error) {
     return (
         <Layout>
@@ -172,7 +156,6 @@ export default function Usuarios() {
       );
     }
     
-    // --- Tabela Desktop ---
     if (!isMobile) {
       return (
         <Table>
@@ -190,7 +173,7 @@ export default function Usuarios() {
                 <TableCell>{usuario.email || "N/A"}</TableCell>
                 <TableCell>
                   <Select
-                    value={usuario.user_role || "usuario"} // Ajuste aqui
+                    value={usuario.user_role || "usuario"}
                     onValueChange={(newRole: AppRole) => handleRoleChange(usuario.user_id, newRole)}
                     disabled={usuario.user_id === user?.id || isUpdatingRole}
                   >
@@ -213,7 +196,6 @@ export default function Usuarios() {
       );
     }
 
-    // --- Cards Mobile ---
     return (
         <div className="space-y-4 p-4">
             {usuarios.map(usuario => (
@@ -225,7 +207,7 @@ export default function Usuarios() {
                     <CardContent>
                         <Label>Permissão</Label>
                          <Select
-                            value={usuario.user_role || "usuario"} // Ajuste aqui
+                            value={usuario.user_role || "usuario"}
                             onValueChange={(newRole: AppRole) => handleRoleChange(usuario.user_id, newRole)}
                             disabled={usuario.user_id === user?.id || isUpdatingRole}
                         >

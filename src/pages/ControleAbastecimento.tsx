@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Gauge, Search } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { formatCurrency, formatNumber, formatDate } from "@/lib/formatters";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -54,6 +55,11 @@ interface MotoristaSelecao {
   matricula: string;
   nome: string;
 }
+interface PostoSelecao {
+  id: string;
+  nome: string;
+}
+
 interface Abastecimento {
   id: string;
   data: string;
@@ -70,7 +76,6 @@ interface Abastecimento {
   odometro: number | null;
   km_percorridos: number | null;
   media_km_l: number | null;
-  // --- NOVO CAMPO ---
   posto: string | null;
 }
 
@@ -110,11 +115,31 @@ const fetchMotoristas = async () => {
   return (data as MotoristaSelecao[]) || [];
 };
 
+// NOVA FUNÇÃO DE FETCH
+const fetchPostos = async () => {
+  const { data, error } = await supabase.from("postos").select("id, nome").order("nome");
+  if (error) {
+    console.error("Erro ao buscar postos, usando padrão.", error);
+    return []; 
+  }
+  return (data as PostoSelecao[]) || [];
+};
+
 export default function ControleAbastecimento() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  
+  // Lógica de anos dinâmica
+  const currentYear = new Date().getFullYear();
+  const startYear = 2025;
+  const yearsList = Array.from(
+    { length: currentYear - startYear + 1 },
+    (_, i) => currentYear - i // Retorna números (não strings), pois o state é number
+  );
+
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  
   const [selectedWeek, setSelectedWeek] = useState<number | "all">("all");
   const [searchTerm, setSearchTerm] = useState("");
   const { userRole } = useAuth();
@@ -135,7 +160,7 @@ export default function ControleAbastecimento() {
       quantidade_litros: 0,
       valor_reais: 0,
       odometro: 0,
-      posto: "Posto Rota 28", // Valor padrão
+      posto: "",
     },
   });
   
@@ -184,6 +209,11 @@ export default function ControleAbastecimento() {
   const { data: motoristas = [] } = useQuery<MotoristaSelecao[]>({
     queryKey: ["motoristasForm"],
     queryFn: fetchMotoristas,
+  });
+  
+  const { data: postos = [] } = useQuery<PostoSelecao[]>({
+    queryKey: ["postosForm"],
+    queryFn: fetchPostos,
   });
 
   const veiculosList = useMemo(() => [...viaturas, ...maquinarios].sort((a, b) => a.nome.localeCompare(b.nome)), [viaturas, maquinarios]);
@@ -294,7 +324,7 @@ export default function ControleAbastecimento() {
       quantidade_litros: 0,
       valor_reais: 0,
       odometro: 0,
-      posto: "Posto Rota 28",
+      posto: "",
     });
     setEditingId(null);
     setValorUnitario(0);
@@ -305,7 +335,7 @@ export default function ControleAbastecimento() {
       ...abastecimento,
       cartao: abastecimento.cartao || "",
       odometro: abastecimento.odometro || 0,
-      posto: (abastecimento.posto as "Posto Rota 28" | "Posto Universo") || "Posto Rota 28",
+      posto: abastecimento.posto || "",
     });
     
     if (abastecimento.quantidade_litros > 0 && abastecimento.valor_reais > 0) {
@@ -441,7 +471,7 @@ export default function ControleAbastecimento() {
                           <strong className="px-1">{abastecimento.veiculo}</strong>
                           do dia
                           <strong className="px-1">
-                            {new Date(abastecimento.data).toLocaleDateString("pt-BR")}
+                            {formatDate(abastecimento.data)}
                           </strong>
                           .
                         </AlertDialogDescription>
@@ -485,26 +515,24 @@ export default function ControleAbastecimento() {
           <TableBody>
             {filteredAbastecimentos.map((abastecimento) => (
               <TableRow key={abastecimento.id}>
-                <TableCell>
-                  {new Date(abastecimento.data).toLocaleDateString("pt-BR")}
-                </TableCell>
+                <TableCell>{formatDate(abastecimento.data)}</TableCell>
                 <TableCell>{abastecimento.semana}</TableCell>
                 <TableCell className="font-medium">{abastecimento.veiculo}</TableCell>
                 <TableCell>{abastecimento.placa}</TableCell>
                 <TableCell>{abastecimento.motorista}</TableCell>
                 <TableCell>{abastecimento.posto}</TableCell>
                 <TableCell>{abastecimento.odometro || "-"}</TableCell>
-                <TableCell>{abastecimento.quantidade_litros.toFixed(2)} L</TableCell>
-                <TableCell>R$ {abastecimento.valor_reais.toFixed(2)}</TableCell>
+                <TableCell>{formatNumber(abastecimento.quantidade_litros)} L</TableCell>
+                <TableCell>{formatCurrency(abastecimento.valor_reais)}</TableCell>
                 
                 <TableCell>
                   {abastecimento.quantidade_litros > 0
-                    ? `R$ ${(abastecimento.valor_reais / abastecimento.quantidade_litros).toFixed(3)}`
+                    ? formatCurrency(abastecimento.valor_reais / abastecimento.quantidade_litros)
                     : "-"}
                 </TableCell>
                 <TableCell>{abastecimento.km_percorridos || "-"}</TableCell>
                 <TableCell>
-                  {abastecimento.media_km_l ? `${abastecimento.media_km_l.toFixed(2)} km/L` : "-"}
+                  {abastecimento.media_km_l ? `${formatNumber(abastecimento.media_km_l)} km/L` : "-"}
                 </TableCell>
                 
                 <TableCell>
@@ -532,7 +560,7 @@ export default function ControleAbastecimento() {
                               <strong className="px-1">{abastecimento.veiculo}</strong>
                               do dia
                               <strong className="px-1">
-                                {new Date(abastecimento.data).toLocaleDateString("pt-BR")}
+                                {formatDate(abastecimento.data)}
                               </strong>
                               .
                             </AlertDialogDescription>
@@ -774,22 +802,23 @@ export default function ControleAbastecimento() {
                   />
                 </div>
                 
-                {/* --- SELETOR DE POSTO --- */}
+                {/* --- SELETOR DE POSTO DINÂMICO --- */}
                 <FormField
                   control={form.control}
                   name="posto"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Posto de Abastecimento</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value || ""}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Selecione o posto" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="Posto Rota 28">Posto Rota 28</SelectItem>
-                          <SelectItem value="Posto Universo">Posto Universo</SelectItem>
+                          {postos.map((p) => (
+                             <SelectItem key={p.id} value={p.nome}>{p.nome}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -839,13 +868,11 @@ export default function ControleAbastecimento() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(
-                    (year) => (
-                      <SelectItem key={year} value={year.toString()}>
-                        {year}
-                      </SelectItem>
-                    )
-                  )}
+                  {yearsList.map(year => (
+                    <SelectItem key={year} value={year.toString()}>
+                      {year}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </CardHeader>
@@ -887,10 +914,10 @@ export default function ControleAbastecimento() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-2xl font-bold text-primary">
-                    R$ {week.reais.toFixed(2)}
+                    {formatCurrency(week.reais)}
                   </p>
                   <p className="text-muted-foreground">
-                    {week.litros.toFixed(2)} Litros
+                    {formatNumber(week.litros)} Litros
                   </p>
                 </CardContent>
               </Card>
@@ -901,10 +928,10 @@ export default function ControleAbastecimento() {
             </CardHeader>
             <CardContent>
               <p className="text-3xl font-bold text-primary">
-                R$ {monthTotal.reais.toFixed(2)}
+                {formatCurrency(monthTotal.reais)}
               </p>
               <p className="text-lg text-muted-foreground">
-                {monthTotal.litros.toFixed(2)} Litros
+                {formatNumber(monthTotal.litros)} Litros
               </p>
             </CardContent>
           </Card>

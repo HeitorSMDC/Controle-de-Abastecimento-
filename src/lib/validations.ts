@@ -31,10 +31,8 @@ export const abastecimentoSchema = z.object({
   valor_reais: z.number().min(0.01, "Valor deve ser positivo"),
   odometro: z.number().min(1, "Odômetro deve ser um número positivo"),
   
-  // --- NOVO CAMPO: Posto ---
-  posto: z.enum(["Posto Rota 28", "Posto Universo"], {
-    required_error: "Selecione o posto de abastecimento",
-  }),
+  // --- ALTERADO: Agora aceita qualquer string não vazia (dinâmico) ---
+  posto: z.string().min(1, "Selecione o posto de abastecimento"),
 });
 export type AbastecimentoFormData = z.infer<typeof abastecimentoSchema>;
 
