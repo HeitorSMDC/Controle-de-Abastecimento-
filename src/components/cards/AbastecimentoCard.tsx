@@ -3,8 +3,9 @@
 import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Pencil, Gauge, TrendingUp, DollarSign } from "lucide-react"; // Novos ícones
-import { Separator } from "@/components/ui/separator"; // Novo
+import { Pencil, Gauge } from "lucide-react"; 
+import { Separator } from "@/components/ui/separator"; 
+import { formatCurrency, formatNumber, formatDate } from "@/lib/formatters";
 
 // Interface atualizada
 interface Abastecimento {
@@ -51,13 +52,13 @@ export function AbastecimentoCard({
           <div>
             <p className="text-xs font-medium text-muted-foreground">Valor Gasto</p>
             <p className="text-xl font-bold text-primary">
-              R$ {abastecimento.valor_reais.toFixed(2)}
+              {formatCurrency(abastecimento.valor_reais)}
             </p>
           </div>
           <div className="text-right">
             <p className="text-xs font-medium text-muted-foreground">Quantidade</p>
             <p className="text-lg font-semibold">
-              {abastecimento.quantidade_litros.toFixed(2)} L
+              {formatNumber(abastecimento.quantidade_litros)} L
             </p>
           </div>
         </div>
@@ -75,7 +76,7 @@ export function AbastecimentoCard({
           <div>
             <p className="text-xs font-medium text-muted-foreground">Média</p>
             <p className="text-sm font-semibold text-green-600">
-              {abastecimento.media_km_l ? `${abastecimento.media_km_l.toFixed(2)} km/L` : "N/A"}
+              {abastecimento.media_km_l ? `${formatNumber(abastecimento.media_km_l)} km/L` : "N/A"}
             </p>
           </div>
         </div>
@@ -91,8 +92,7 @@ export function AbastecimentoCard({
           <div>
             <p className="text-xs font-medium text-muted-foreground">Data (Semana)</p>
             <p className="text-sm">
-              {new Date(abastecimento.data).toLocaleDateString("pt-BR")} (Sem.{" "}
-              {abastecimento.semana})
+              {formatDate(abastecimento.data)} (Sem. {abastecimento.semana})
             </p>
           </div>
            <div>
