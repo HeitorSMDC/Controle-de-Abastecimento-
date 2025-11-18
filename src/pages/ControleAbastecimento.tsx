@@ -115,7 +115,6 @@ const fetchMotoristas = async () => {
   return (data as MotoristaSelecao[]) || [];
 };
 
-// NOVA FUNÇÃO DE FETCH
 const fetchPostos = async () => {
   const { data, error } = await supabase.from("postos").select("id, nome").order("nome");
   if (error) {
@@ -135,7 +134,7 @@ export default function ControleAbastecimento() {
   const startYear = 2025;
   const yearsList = Array.from(
     { length: currentYear - startYear + 1 },
-    (_, i) => currentYear - i // Retorna números (não strings), pois o state é number
+    (_, i) => currentYear - i 
   );
 
   const [selectedYear, setSelectedYear] = useState(currentYear);
@@ -146,7 +145,8 @@ export default function ControleAbastecimento() {
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   
-  const [valorUnitario, setValorUnitario] = useState(0);
+  // Estado local para o campo de valor unitário (para não depender do hook form diretamente e evitar loops)
+  const [valorUnitarioDisplay, setValorUnitarioDisplay] = useState("");
 
   const form = useForm<AbastecimentoFormData>({
     resolver: zodResolver(abastecimentoSchema),
@@ -164,32 +164,54 @@ export default function ControleAbastecimento() {
     },
   });
   
-  const watchLitros = form.watch("quantidade_litros");
-  const watchValorTotal = form.watch("valor_reais");
+  // --- LÓGICA DE CÁLCULO MELHORADA (Sem useEffect) ---
 
-  useEffect(() => {
-    if (watchLitros > 0 && watchValorTotal > 0) {
-      setValorUnitario(watchValorTotal / watchLitros);
-    } else if (watchLitros === 0 && watchValorTotal === 0) {
-      if (valorUnitario !== 0) setValorUnitario(0);
+  // Quando muda a quantidade (Litros)
+  const handleLitrosChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const litros = parseFloat(e.target.value);
+    const unitario = parseFloat(valorUnitarioDisplay);
+
+    // Atualiza o formulário
+    form.setValue("quantidade_litros", isNaN(litros) ? 0 : litros, { shouldValidate: true });
+
+    // Se tivermos um valor unitário válido, calculamos o total
+    if (!isNaN(litros) && !isNaN(unitario)) {
+      const total = litros * unitario;
+      form.setValue("valor_reais", parseFloat(total.toFixed(2)), { shouldValidate: true });
     }
-  }, [watchLitros, watchValorTotal, valorUnitario]);
+  };
 
+  // Quando muda o Valor Unitário
   const handleValorUnitarioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const unitario = parseFloat(e.target.value) || 0;
-    setValorUnitario(unitario);
-    if (watchLitros > 0) {
-      form.setValue("valor_reais", watchLitros * unitario, { shouldValidate: true });
+    const valorInput = e.target.value;
+    setValorUnitarioDisplay(valorInput); // Atualiza o input visualmente imediatamente
+
+    const unitario = parseFloat(valorInput);
+    const litros = form.getValues("quantidade_litros");
+
+    // Se tivermos litros e um unitário válido, calculamos o total
+    if (!isNaN(unitario) && litros > 0) {
+      const total = litros * unitario;
+      form.setValue("valor_reais", parseFloat(total.toFixed(2)), { shouldValidate: true });
+    }
+  };
+
+  // Quando muda o Valor Total (caso o utilizador queira ajustar o total final)
+  const handleValorTotalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const total = parseFloat(e.target.value);
+    const litros = form.getValues("quantidade_litros");
+
+    form.setValue("valor_reais", isNaN(total) ? 0 : total, { shouldValidate: true });
+
+    // Se mudarmos o total, recalculamos o unitário para manter consistência visual
+    if (!isNaN(total) && litros > 0) {
+      const novoUnitario = total / litros;
+      // Arredondamos para 3 casas para visualização
+      setValorUnitarioDisplay(novoUnitario.toFixed(3));
     }
   };
   
-  const handleLitrosChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const litros = parseFloat(e.target.value) || 0;
-    form.setValue("quantidade_litros", litros, { shouldValidate: true });
-    if (valorUnitario > 0) {
-      form.setValue("valor_reais", litros * valorUnitario, { shouldValidate: true });
-    }
-  };
+  // --- FIM DA LÓGICA DE CÁLCULO ---
 
   const { data, isLoading } = useQuery<Abastecimento[]>({
     queryKey: ["abastecimentos", selectedMonth, selectedYear],
@@ -327,7 +349,7 @@ export default function ControleAbastecimento() {
       posto: "",
     });
     setEditingId(null);
-    setValorUnitario(0);
+    setValorUnitarioDisplay("");
   };
 
   const handleEdit = (abastecimento: Abastecimento) => {
@@ -338,10 +360,12 @@ export default function ControleAbastecimento() {
       posto: abastecimento.posto || "",
     });
     
+    // Calcular e definir o valor unitário para edição
     if (abastecimento.quantidade_litros > 0 && abastecimento.valor_reais > 0) {
-      setValorUnitario(abastecimento.valor_reais / abastecimento.quantidade_litros);
+      const unitario = abastecimento.valor_reais / abastecimento.quantidade_litros;
+      setValorUnitarioDisplay(unitario.toFixed(3));
     } else {
-      setValorUnitario(0);
+      setValorUnitarioDisplay("");
     }
     
     setEditingId(abastecimento.id);
@@ -759,7 +783,7 @@ export default function ControleAbastecimento() {
                             step="0.01"
                             placeholder="0.00"
                             {...field}
-                            onChange={handleLitrosChange}
+                            onChange={handleLitrosChange} // Atualizado
                           />
                         </FormControl>
                         <FormMessage />
@@ -773,12 +797,12 @@ export default function ControleAbastecimento() {
                           type="number"
                           step="0.001"
                           placeholder="0.000"
-                          value={valorUnitario > 0 ? valorUnitario.toFixed(3) : ""}
-                          onChange={handleValorUnitarioChange}
+                          value={valorUnitarioDisplay}
+                          onChange={handleValorUnitarioChange} // Atualizado
                         />
                       </FormControl>
                       <FormDescriptionValid>
-                        Mude aqui para calcular o valor total.
+                        Preencha para calcular o total.
                       </FormDescriptionValid>
                     </FormItem>
                   <FormField
@@ -793,7 +817,7 @@ export default function ControleAbastecimento() {
                             step="0.01"
                             placeholder="0.00"
                             {...field}
-                            onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                            onChange={handleValorTotalChange} // Atualizado
                           />
                         </FormControl>
                         <FormMessage />
