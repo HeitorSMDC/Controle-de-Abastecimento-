@@ -27,11 +27,9 @@ export const abastecimentoSchema = z.object({
   cartao: z.string().optional().nullable(),
   motorista: z.string().min(1, "Motorista é obrigatório"),
   matricula: z.string().min(1, "Matrícula é obrigatória"),
-  quantidade_litros: z.number().min(0.01, "Quantidade deve ser positiva"),
-  valor_reais: z.number().min(0.01, "Valor deve ser positivo"),
+  quantidade_litros: z.number().min(0.0001, "Quantidade deve ser positiva"),
+  valor_reais: z.number().min(0.0001, "Valor deve ser positivo"),
   odometro: z.number().min(1, "Odômetro deve ser um número positivo"),
-  
-  // --- ALTERADO: Agora aceita qualquer string não vazia (dinâmico) ---
   posto: z.string().min(1, "Selecione o posto de abastecimento"),
 });
 export type AbastecimentoFormData = z.infer<typeof abastecimentoSchema>;

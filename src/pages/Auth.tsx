@@ -5,17 +5,17 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input"; // Ainda é necessário para o email
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import logo from "@/assets/defesa-civil-logo.png";
-
-// NOVO: Importar o componente de senha
 import { PasswordField } from "@/components/PasswordField";
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
+  const [isRecovering, setIsRecovering] = useState(false);
+  
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [nome, setNome] = useState("");
@@ -28,6 +28,31 @@ export default function Auth() {
       navigate("/");
     }
   }, [user, navigate]);
+  
+  const handleRecoverPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const redirectUrl = `${window.location.origin}/dashboard`;
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: redirectUrl,
+      });
+
+      if (error) throw error;
+
+      toast.success("E-mail de recuperação enviado!", {
+        description: "Verifique a sua caixa de entrada para um link de redefinição de senha.",
+        duration: 10000,
+      });
+      setIsRecovering(false);
+      setEmail("");
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao solicitar recuperação de senha.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,27 +68,26 @@ export default function Auth() {
         toast.success("Login realizado com sucesso!");
         navigate("/");
       } else {
-        // O Trigger no Supabase (handle_new_user) vai criar o perfil e a role.
-        // Só precisamos de passar o 'nome' nos metadados.
-        const redirectUrl = `${window.location.origin}/`;
-        const { data, error } = await supabase.auth.signUp({
+        // --- ALTERAÇÃO AQUI: Redireciona explicitamente para /login após a confirmação do e-mail ---
+        const redirectUrl = `${window.location.origin}/login`;
+        
+        const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
             emailRedirectTo: redirectUrl,
             data: {
-              nome, // O Trigger vai ler este 'nome'
+              nome,
             },
           },
         });
         
         if (error) throw error;
         
-        // As inserções manuais em 'profiles' e 'user_roles' foram removidas
-        // pois o Gatilho SQL no Supabase trata disso automaticamente.
-        
-        toast.success("Conta criada com sucesso!");
-        navigate("/");
+        toast.success("Conta criada com sucesso! Por favor, verifique o seu email.");
+        setIsLogin(true); 
+        setEmail("");
+        setPassword("");
       }
     } catch (error: any) {
       toast.error(error.message || "Erro ao processar solicitação");
@@ -71,6 +95,20 @@ export default function Auth() {
       setLoading(false);
     }
   };
+  
+  const toggleView = (view: 'login' | 'signup' | 'recover') => {
+    setEmail("");
+    setPassword("");
+    setNome("");
+    if (view === 'recover') {
+      setIsRecovering(true);
+      setIsLogin(true);
+    } else {
+      setIsRecovering(false);
+      setIsLogin(view === 'login');
+    }
+  }
+
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10">
@@ -80,59 +118,98 @@ export default function Auth() {
             <img src={logo} alt="Defesa Civil" className="h-20 w-20" />
           </div>
           <CardTitle className="text-2xl">Sistema de Controle de Veículos</CardTitle>
-          <CardDescription>Defesa Civil - Campos dos Goytacazes</CardDescription>
+          <CardDescription>
+            {isRecovering ? "Recuperação de Senha" : "Defesa Civil - Campos dos Goytacazes"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleAuth} className="space-y-4">
-            {!isLogin && (
+          {/* Formulário de Recuperação de Senha */}
+          {isRecovering ? (
+            <form onSubmit={handleRecoverPassword} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="nome">Nome</Label>
+                <Label htmlFor="email">Email</Label>
                 <Input
-                  id="nome"
-                  type="text"
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   required
-                  placeholder="Seu nome completo"
+                  placeholder="seu@email.com"
                 />
               </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder="seu@email.com"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "Enviando..." : "Enviar Link de Recuperação"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={() => toggleView('login')}
+                disabled={loading}
+              >
+                Voltar para o Login
+              </Button>
+            </form>
+          ) : (
+            /* Formulário de Login/Cadastro */
+            <form onSubmit={handleAuth} className="space-y-4">
+              {!isLogin && (
+                <div className="space-y-2">
+                  <Label htmlFor="nome">Nome</Label>
+                  <Input
+                    id="nome"
+                    type="text"
+                    value={nome}
+                    onChange={(e) => setNome(e.target.value)}
+                    required
+                    placeholder="Seu nome completo"
+                  />
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  placeholder="seu@email.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Senha</Label>
+                <PasswordField
+                  id="password"
+                  value={password}
+                  onChange={(value) => setPassword(value)}
+                  required
+                  placeholder="••••••••"
+                />
+              </div>
               
-              {/* Substituímos o <Input> pelo <PasswordField> */}
-              <PasswordField
-                id="password"
-                value={password}
-                onChange={(value) => setPassword(value)}
-                required
-                placeholder="••••••••"
-              />
+              {isLogin && (
+                <p className="text-right text-sm">
+                  <Button type="button" variant="link" size="sm" onClick={() => toggleView('recover')} className="p-0 h-auto font-normal">
+                    Esqueceu a senha?
+                  </Button>
+                </p>
+              )}
               
-            </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Processando..." : isLogin ? "Entrar" : "Criar Conta"}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-full"
-              onClick={() => setIsLogin(!isLogin)}
-            >
-              {isLogin ? "Criar nova conta" : "Já tenho uma conta"}
-            </Button>
-          </form>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "Processando..." : isLogin ? "Entrar" : "Criar Conta"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={() => toggleView(isLogin ? 'signup' : 'login')}
+                disabled={loading}
+              >
+                {isLogin ? "Criar nova conta" : "Já tenho uma conta"}
+              </Button>
+            </form>
+          )}
         </CardContent>
       </Card>
     </div>

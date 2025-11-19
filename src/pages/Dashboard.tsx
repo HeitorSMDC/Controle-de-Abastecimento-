@@ -9,12 +9,12 @@ import { ChartConfig, ChartContainer, ChartLegend, ChartLegendContent, ChartTool
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Pie, PieChart, Cell } from "recharts";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { TrendingUp, X } from "lucide-react"; 
+import { TrendingUp, X, Car, Truck } from "lucide-react"; // Adicionado Car e Truck
 import { Button } from "@/components/ui/button";
 import { combustivelOptions } from "@/lib/constants";
 import { formatCurrency, formatNumber } from "@/lib/formatters";
 
-// --- Interfaces ---
+// --- Interfaces Atualizadas ---
 interface GastoMes { mes: number; mes_nome: string; total: number; }
 interface GastoItem { nome: string; total: number; fill: string; }
 
@@ -26,6 +26,9 @@ interface DashboardData {
   gastos_por_mes: GastoMes[];
   gastos_por_veiculo: GastoItem[];
   gastos_por_posto: GastoItem[];
+  // NOVO: Adiciona as médias específicas
+  media_km_l_viaturas: number;
+  media_km_l_maquinario: number;
 }
 
 interface Filters {
@@ -37,27 +40,46 @@ interface Filters {
 
 // --- Função de Fetch Atualizada e Blindada ---
 const fetchDashboardData = async (filters: Filters): Promise<DashboardData> => {
-  // Prepara os parâmetros garantindo que "all" vira null
+  // 1. Prepara os parâmetros garantindo que "all" vira null
+  const ano = parseInt(filters.ano, 10);
   const params = {
-    p_ano: parseInt(filters.ano, 10), // Garante inteiro
+    p_ano: ano,
     p_combustivel: filters.combustivel === "all" ? null : filters.combustivel,
     p_placa: filters.placa === "all" ? null : filters.placa,
     p_posto: filters.posto === "all" ? null : filters.posto,
   };
 
-  const { data, error } = await supabase.rpc("get_dashboard_stats", params);
+  // 2. Chamadas RPC paralelas para eficiência
+  const [statsResponse, viaturasMediaResponse, maquinarioMediaResponse] = await Promise.all([
+      supabase.rpc("get_dashboard_stats", params),
+      supabase.rpc("get_media_km_l_por_tipo", { p_tipo_veiculo: 'viatura', p_ano: ano }),
+      supabase.rpc("get_media_km_l_por_tipo", { p_tipo_veiculo: 'maquinario', p_ano: ano }),
+  ]);
 
-  if (error) {
-    console.error("Erro RPC:", error);
-    throw new Error(error.message);
+  if (statsResponse.error) {
+    console.error("Erro RPC (get_dashboard_stats):", statsResponse.error);
+    throw new Error(statsResponse.error.message);
   }
   
-  // Cores
+  if (viaturasMediaResponse.error) {
+      console.error("Erro RPC (viaturas):", viaturasMediaResponse.error);
+      throw new Error(viaturasMediaResponse.error.message);
+  }
+  
+  if (maquinarioMediaResponse.error) {
+      console.error("Erro RPC (maquinario):", maquinarioMediaResponse.error);
+      throw new Error(maquinarioMediaResponse.error.message);
+  }
+
+  // 3. Extrai as médias (o Supabase RPC retorna um array, pegamos o primeiro elemento)
+  const mediaKmLViatura = viaturasMediaResponse.data?.[0]?.media || 0;
+  const mediaKmLMaquinario = maquinarioMediaResponse.data?.[0]?.media || 0;
+
+  // 4. Prepara os dados para o retorno
   const COLORS_VEICULOS = ["#0ea5e9", "#22c55e", "#eab308", "#f97316", "#ef4444"];
   const COLORS_POSTOS = ["#8b5cf6", "#ec4899", "#06b6d4"];
 
-  // Função segura de formatação (evita erro se data for null)
-  const safeData = data || {
+  const safeData = statsResponse.data || {
       total_gasto_ano: 0,
       total_litros_ano: 0,
       gasto_medio_por_litro: 0,
@@ -76,19 +98,22 @@ const fetchDashboardData = async (filters: Filters): Promise<DashboardData> => {
   return { 
     ...safeData, 
     gastos_por_veiculo: formatChartData(safeData.gastos_por_veiculo, COLORS_VEICULOS),
-    gastos_por_posto: formatChartData(safeData.gastos_por_posto, COLORS_POSTOS) 
+    gastos_por_posto: formatChartData(safeData.gastos_por_posto, COLORS_POSTOS),
+    // NOVO: Adiciona as médias ao objeto de retorno
+    media_km_l_viaturas: parseFloat(mediaKmLViatura.toFixed(2)),
+    media_km_l_maquinario: parseFloat(mediaKmLMaquinario.toFixed(2)),
   };
 };
 
 // Buscar listas para os filtros
 const fetchFilterOptions = async () => {
-  const [veiculos, postos] = await Promise.all([
+  const [viaturas, postos] = await Promise.all([
     supabase.from("viaturas").select("placa, nome").order("nome"),
     supabase.from("postos").select("nome").order("nome"), 
   ]);
   
   return {
-    veiculos: veiculos.data || [],
+    veiculos: viaturas.data || [],
     postos: postos.data || [] 
   };
 };
@@ -160,7 +185,7 @@ export default function Dashboard() {
     <Layout>
       <div className="space-y-6">
         
-        {/* --- Header e Filtros --- */}
+        {/* --- Header e Filtros (Não alterado) --- */}
         <div className="flex flex-col space-y-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
@@ -234,15 +259,33 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* --- KPIs --- */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {/* --- KPIs ATUALIZADOS --- */}
+        <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
           <KpiCard title="Total Gasto" value={formatCurrency(stats.total_gasto_ano)} icon="R$" color="text-primary" />
           <KpiCard title="Total Consumido" value={`${formatNumber(stats.total_litros_ano)} L`} icon="L" color="text-blue-500" />
           <KpiCard title="Preço Médio/Litro" value={formatCurrency(stats.gasto_medio_por_litro)} icon="Avg" color="text-muted-foreground" />
+          
+          {/* Métrica Global */}
           <KpiCard title="Média Frota (Km/L)" value={formatNumber(stats.media_km_l_frota)} icon={<TrendingUp className="h-5 w-5" />} color="text-green-600" />
+          
+          {/* NOVO: Média de Viaturas */}
+          <KpiCard 
+            title="Média Viaturas" 
+            value={formatNumber(stats.media_km_l_viaturas)} 
+            icon={<Car className="h-5 w-5" />} 
+            color={stats.media_km_l_viaturas > 0 ? "text-green-600" : "text-gray-400"} 
+          />
+          
+          {/* NOVO: Média de Maquinário */}
+          <KpiCard 
+            title="Média Maquinário" 
+            value={formatNumber(stats.media_km_l_maquinario)} 
+            icon={<Truck className="h-5 w-5" />} 
+            color={stats.media_km_l_maquinario > 0 ? "text-green-600" : "text-gray-400"} 
+          />
         </div>
         
-        {/* --- Gráficos --- */}
+        {/* --- Gráficos (Não alterado) --- */}
         <div className="grid gap-6 md:grid-cols-2">
           
           {/* Barras: Gasto Mensal */}

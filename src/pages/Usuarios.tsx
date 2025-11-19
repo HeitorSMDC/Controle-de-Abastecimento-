@@ -8,9 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label"; // Importar Label
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Users, Search } from "lucide-react";
+import { Users, Search, Trash2 } from "lucide-react"; // Importar Trash2
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -24,6 +24,17 @@ import {
 } from "@/components/ui/pagination";
 import { EmptyState } from "@/components/EmptyState";
 import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 // Tipos
 type AppRole = "admin" | "coordenador" | "usuario";
@@ -65,7 +76,7 @@ const fetchUsuarios = async (page: number, searchTerm: string) => {
 
 export default function Usuarios() {
   const [searchTerm, setSearchTerm] = useState("");
-  const { user } = useAuth();
+  const { user, userRole } = useAuth();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const [page, setPage] = useState(1);
@@ -89,24 +100,50 @@ export default function Usuarios() {
   // Mutação para ATUALIZAR a role de um utilizador
   const { mutate: updateUserRole, isPending: isUpdatingRole } = useMutation({
     mutationFn: async ({ userId, newRole }: { userId: string, newRole: AppRole }) => {
-      const { error } = await supabase
+      // 1. Atualizar a tabela user_roles
+      const { error: roleError } = await supabase
         .from("user_roles")
         .update({ role: newRole })
         .eq("user_id", userId);
 
-      if (error) throw error;
+      if (roleError) throw roleError;
+
+      // 2. Tenta atualizar a metadata do Auth (necessário para o RLS funcionar com o role)
+      const { data: authUpdateData, error: authUpdateError } = await supabase.auth.admin.updateUserById(userId, {
+        user_metadata: { role: newRole }
+      });
+      if (authUpdateError) console.error("Aviso: Falha ao atualizar Auth metadata:", authUpdateError.message);
+
       return { userId, newRole };
     },
     onSuccess: ({ newRole }) => {
       toast.success(`Permissão atualizada para ${newRole}!`);
-      // --- MELHORIA: INVALIDAR A QUERY ---
-      // Garante que os dados vêm sempre da fonte da verdade
       queryClient.invalidateQueries({ queryKey: ["usuarios"] });
     },
     onError: (error: any) => {
       toast.error(error.message || "Erro ao atualizar permissão");
     },
   });
+  
+  // NOVA MUTAÇÃO: Para DELETAR um utilizador
+  const { mutate: deleteUser, isPending: isDeletingUser } = useMutation({
+    mutationFn: async (userId: string) => {
+      // Chamamos a função RPC que criamos (só Admins podem chamar)
+      const { error } = await supabase.rpc("delete_user", { user_to_delete_id: userId });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Utilizador excluído com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ["usuarios"] });
+      if (usuarios.length === 1 && page > 1) {
+        setPage(page - 1);
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Erro ao excluir utilizador");
+    },
+  });
+
 
   const handleRoleChange = (userId: string, newRole: AppRole) => {
     if (userId === user?.id) {
@@ -137,6 +174,9 @@ export default function Usuarios() {
         </Layout>
     );
   }
+  
+  // Variável para desabilitar ações durante mutação
+  const isActionDisabled = isUpdatingRole || isDeletingUser;
 
   const renderContent = () => {
     if (isLoading) {
@@ -164,6 +204,7 @@ export default function Usuarios() {
               <TableHead>Nome</TableHead>
               <TableHead>Email</TableHead>
               <TableHead className="w-[200px]">Permissão</TableHead>
+              <TableHead className="w-[100px] text-center">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -175,7 +216,7 @@ export default function Usuarios() {
                   <Select
                     value={usuario.user_role || "usuario"}
                     onValueChange={(newRole: AppRole) => handleRoleChange(usuario.user_id, newRole)}
-                    disabled={usuario.user_id === user?.id || isUpdatingRole}
+                    disabled={usuario.user_id === user?.id || isActionDisabled}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -188,6 +229,36 @@ export default function Usuarios() {
                       ))}
                     </SelectContent>
                   </Select>
+                </TableCell>
+                <TableCell className="text-center">
+                  {usuario.user_id === user?.id ? (
+                     <span className="text-xs text-muted-foreground">Conta Ativa</span>
+                  ) : (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" disabled={isActionDisabled} className="text-destructive hover:text-destructive">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Tem a certeza que quer apagar este utilizador?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Esta ação não pode ser revertida. O utilizador **{usuario.nome}** será permanentemente removido, juntamente com todos os seus dados de autenticação.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => deleteUser(usuario.user_id)}
+                            disabled={isActionDisabled}
+                          >
+                            Continuar
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
@@ -204,12 +275,12 @@ export default function Usuarios() {
                         <CardTitle className="text-base">{usuario.nome}</CardTitle>
                         <CardDescription>{usuario.email || "N/A"}</CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-4">
                         <Label>Permissão</Label>
                          <Select
                             value={usuario.user_role || "usuario"}
                             onValueChange={(newRole: AppRole) => handleRoleChange(usuario.user_id, newRole)}
-                            disabled={usuario.user_id === user?.id || isUpdatingRole}
+                            disabled={usuario.user_id === user?.id || isActionDisabled}
                         >
                             <SelectTrigger>
                             <SelectValue />
@@ -222,6 +293,35 @@ export default function Usuarios() {
                             ))}
                             </SelectContent>
                         </Select>
+                        {usuario.user_id !== user?.id && (
+                           <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm" className="w-full" disabled={isActionDisabled}>
+                                  <Trash2 className="mr-2 h-4 w-4" /> Apagar Utilizador
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Tem a certeza que quer apagar este utilizador?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Esta ação não pode ser revertida. O utilizador **{usuario.nome}** será permanentemente removido, juntamente com todos os seus dados de autenticação.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deleteUser(usuario.user_id)}
+                                    disabled={isActionDisabled}
+                                  >
+                                    Continuar
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                           </AlertDialog>
+                        )}
+                        {usuario.user_id === user?.id && (
+                             <p className="text-center text-sm text-muted-foreground pt-2">Não pode apagar a sua própria conta.</p>
+                        )}
                     </CardContent>
                 </Card>
             ))}

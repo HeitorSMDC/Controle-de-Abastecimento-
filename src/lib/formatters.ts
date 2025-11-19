@@ -1,24 +1,24 @@
 // src/lib/formatters.ts
 
-export const formatCurrency = (value: number) => {
+export const formatCurrency = (value: number, precise = false) => {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
+    minimumFractionDigits: precise ? 4 : 2,
+    maximumFractionDigits: precise ? 4 : 2,
   }).format(value);
 };
 
 export const formatDate = (dateString: string) => {
   if (!dateString) return "-";
   
-  // Correção de Fuso Horário:
-  // Se a data vier no formato YYYY-MM-DD (ex: 2025-11-13),
-  // fazemos o parse manual para evitar que o navegador converta para o dia anterior.
+  // Correção de Fuso Horário para datas YYYY-MM-DD
+  // Força a exibição exata da string, sem conversão de timezone do navegador
   if (dateString.includes('-') && dateString.length === 10) {
      const [year, month, day] = dateString.split('-');
      return `${day}/${month}/${year}`;
   }
   
-  // Fallback para outros formatos
   return new Date(dateString).toLocaleDateString("pt-BR");
 };
 
