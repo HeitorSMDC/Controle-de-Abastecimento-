@@ -9,8 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button"; // <<-- CORREÇÃO: Importação do Button
 import { toast } from "sonner";
-import { Users, Search, Trash2 } from "lucide-react"; // Importar Trash2
+import { Users, Search, Trash2 } from "lucide-react"; 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { useDebounce } from "@/hooks/use-debounce";
