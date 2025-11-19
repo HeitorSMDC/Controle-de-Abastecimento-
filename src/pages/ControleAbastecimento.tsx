@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Gauge, Search } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { formatCurrency, formatNumber, formatDate } from "@/lib/formatters";
+import { formatCurrency, formatNumber, formatDate, formatUnitPrice } from "@/lib/formatters";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -141,12 +141,17 @@ export default function ControleAbastecimento() {
   
   const [selectedWeek, setSelectedWeek] = useState<number | "all">("all");
   const [searchTerm, setSearchTerm] = useState("");
+  
+  // ESTADO: Filtro por placa
+  const [selectedPlaca, setSelectedPlaca] = useState<string | "all">("all"); 
+  
   const { userRole } = useAuth();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   
   // Estado local para o campo de valor unitário (para controlo visual)
-  const [valorUnitarioDisplay, setValorUnitarioDisplay] = useState("");
+  // Inicializado com 4 casas para refletir a precisão
+  const [valorUnitarioDisplay, setValorUnitarioDisplay] = useState("0.0000"); 
 
   const form = useForm<AbastecimentoFormData>({
     resolver: zodResolver(abastecimentoSchema),
@@ -157,27 +162,27 @@ export default function ControleAbastecimento() {
       cartao: "",
       motorista: "",
       matricula: "",
-      quantidade_litros: 0,
-      valor_reais: 0,
+      quantidade_litros: 0.0000, // Ajustado para 4 casas de precisão
+      valor_reais: 0.00,
       odometro: 0,
       posto: "",
     },
   });
   
-  // --- LÓGICA DE CÁLCULO MELHORADA (Sem loops automáticos) ---
+  // --- LÓGICA DE CÁLCULO ATUALIZADA PARA PRECISÃO ---
 
   // 1. Quando muda a Quantidade (Litros)
   const handleLitrosChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const litros = parseFloat(e.target.value);
     const unitario = parseFloat(valorUnitarioDisplay);
 
-    // Atualiza o formulário
-    form.setValue("quantidade_litros", isNaN(litros) ? 0 : litros, { shouldValidate: true });
+    // Atualiza o formulário: 4 casas de precisão para Litros
+    form.setValue("quantidade_litros", isNaN(litros) ? 0 : parseFloat(litros.toFixed(4)), { shouldValidate: true });
 
     // Se tivermos um valor unitário válido no input, recalculamos o Total
     if (!isNaN(litros) && !isNaN(unitario)) {
       const total = litros * unitario;
-      // Arredonda para 2 casas decimais
+      // Arredonda o total para 2 casas (R$)
       form.setValue("valor_reais", parseFloat(total.toFixed(2)), { shouldValidate: true });
     }
   };
@@ -193,6 +198,7 @@ export default function ControleAbastecimento() {
     // Se tivermos litros e um unitário válido, recalculamos o Total
     if (!isNaN(unitario) && litros > 0) {
       const total = litros * unitario;
+      // Arredonda o total para 2 casas (R$)
       form.setValue("valor_reais", parseFloat(total.toFixed(2)), { shouldValidate: true });
     }
   };
@@ -202,12 +208,13 @@ export default function ControleAbastecimento() {
     const total = parseFloat(e.target.value);
     const litros = form.getValues("quantidade_litros");
 
-    form.setValue("valor_reais", isNaN(total) ? 0 : total, { shouldValidate: true });
+    // Arredonda o total para 2 casas (R$)
+    form.setValue("valor_reais", isNaN(total) ? 0 : parseFloat(total.toFixed(2)), { shouldValidate: true });
 
-    // Se mudarmos o total, recalculamos o unitário visual para manter coerência
+    // Recalcula o unitário visual (com 4 casas)
     if (!isNaN(total) && litros > 0) {
       const novoUnitario = total / litros;
-      setValorUnitarioDisplay(novoUnitario.toFixed(3));
+      setValorUnitarioDisplay(novoUnitario.toFixed(4)); 
     }
   };
   // --- FIM DA LÓGICA DE CÁLCULO ---
@@ -246,12 +253,10 @@ export default function ControleAbastecimento() {
         throw new Error(zodError.errors.map((e) => e.message).join(", "));
       }
 
-      // --- CORREÇÃO DE DATA ---
       // Pegamos a string YYYY-MM-DD
       const [ano, mes, dia] = validatedData.data.split("-").map(Number);
       
       // Criamos a data com hora 12:00:00 para evitar problemas de fuso horário
-      // que poderiam recuar o dia para o anterior.
       const dataObj = new Date(ano, mes - 1, dia, 12, 0, 0);
       
       const semana = getWeekNumber(dataObj);
@@ -350,13 +355,13 @@ export default function ControleAbastecimento() {
       cartao: "",
       motorista: "",
       matricula: "",
-      quantidade_litros: 0,
-      valor_reais: 0,
+      quantidade_litros: 0.0000, // Reset com 4 casas
+      valor_reais: 0.00,
       odometro: 0,
       posto: "",
     });
     setEditingId(null);
-    setValorUnitarioDisplay("");
+    setValorUnitarioDisplay("0.0000"); // Reset com 4 casas
   };
 
   const handleEdit = (abastecimento: Abastecimento) => {
@@ -367,12 +372,12 @@ export default function ControleAbastecimento() {
       posto: abastecimento.posto || "",
     });
     
-    // Calcular e definir o valor unitário para visualização
+    // Calcular e definir o valor unitário para visualização (4 casas)
     if (abastecimento.quantidade_litros > 0 && abastecimento.valor_reais > 0) {
       const unitario = abastecimento.valor_reais / abastecimento.quantidade_litros;
-      setValorUnitarioDisplay(unitario.toFixed(3));
+      setValorUnitarioDisplay(unitario.toFixed(4));
     } else {
-      setValorUnitarioDisplay("");
+      setValorUnitarioDisplay("0.0000");
     }
     
     setEditingId(abastecimento.id);
@@ -398,13 +403,21 @@ export default function ControleAbastecimento() {
 
   const canDelete = userRole === "admin" || userRole === "coordenador";
 
+  // LÓGICA DE FILTRAGEM ATUALIZADA
   const filteredAbastecimentos = useMemo(() => {
     let items = abastecimentos;
 
+    // 1. FILTRO POR SEMANA
     if (selectedWeek !== "all") {
       items = items.filter((item) => item.semana === selectedWeek);
     }
+    
+    // 2. NOVO FILTRO POR PLACA
+    if (selectedPlaca !== "all") {
+      items = items.filter((item) => item.placa === selectedPlaca);
+    }
 
+    // 3. FILTRO POR TERMO DE BUSCA
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
       items = items.filter(
@@ -417,11 +430,12 @@ export default function ControleAbastecimento() {
     }
 
     return items;
-  }, [abastecimentos, selectedWeek, searchTerm]);
+  }, [abastecimentos, selectedWeek, selectedPlaca, searchTerm]);
 
   const weeklyTotals = useMemo(() => {
     const totals: Record<number, { litros: number; reais: number }> = {};
-    abastecimentos.forEach((item) => {
+    
+    filteredAbastecimentos.forEach((item) => {
       if (!totals[item.semana]) {
         totals[item.semana] = { litros: 0, reais: 0 };
       }
@@ -434,10 +448,11 @@ export default function ControleAbastecimento() {
         ...data,
       }))
       .sort((a, b) => a.semana - b.semana);
-  }, [abastecimentos]);
+  }, [filteredAbastecimentos]);
 
   const monthTotal = useMemo(() => {
-    return abastecimentos.reduce(
+    
+    return filteredAbastecimentos.reduce( 
       (acc, item) => {
         acc.litros += item.quantidade_litros;
         acc.reais += item.valor_reais;
@@ -445,7 +460,7 @@ export default function ControleAbastecimento() {
       },
       { litros: 0, reais: 0 }
     );
-  }, [abastecimentos]);
+  }, [filteredAbastecimentos]);
 
   const renderContent = () => {
     if (isLoading) {
@@ -472,6 +487,7 @@ export default function ControleAbastecimento() {
         <div className="p-8 text-center text-muted-foreground">
           Nenhum registro encontrado para "{searchTerm}"
           {selectedWeek !== "all" ? ` na Semana ${selectedWeek}` : ""}
+          {selectedPlaca !== "all" ? ` no Veículo ${selectedPlaca}` : ""}
         </div>
       );
     }
@@ -553,17 +569,17 @@ export default function ControleAbastecimento() {
                 <TableCell>{abastecimento.motorista}</TableCell>
                 <TableCell>{abastecimento.posto}</TableCell>
                 <TableCell>{abastecimento.odometro || "-"}</TableCell>
-                <TableCell>{formatNumber(abastecimento.quantidade_litros)} L</TableCell>
+                <TableCell>{formatNumber(abastecimento.quantidade_litros, 4)} L</TableCell>
                 <TableCell>{formatCurrency(abastecimento.valor_reais)}</TableCell>
                 
                 <TableCell>
                   {abastecimento.quantidade_litros > 0
-                    ? formatCurrency(abastecimento.valor_reais / abastecimento.quantidade_litros)
+                    ? formatUnitPrice(abastecimento.valor_reais / abastecimento.quantidade_litros)
                     : "-"}
                 </TableCell>
                 <TableCell>{abastecimento.km_percorridos || "-"}</TableCell>
                 <TableCell>
-                  {abastecimento.media_km_l ? `${formatNumber(abastecimento.media_km_l)} km/L` : "-"}
+                  {abastecimento.media_km_l ? `${formatNumber(abastecimento.media_km_l, 4)} km/L` : "-"}
                 </TableCell>
                 
                 <TableCell>
@@ -787,8 +803,8 @@ export default function ControleAbastecimento() {
                         <FormControl>
                           <Input
                             type="number"
-                            step="0.01"
-                            placeholder="0.00"
+                            step="0.0001"
+                            placeholder="0.0000"
                             {...field}
                             onChange={handleLitrosChange}
                           />
@@ -802,14 +818,14 @@ export default function ControleAbastecimento() {
                       <FormControl>
                         <Input
                           type="number"
-                          step="0.001"
-                          placeholder="0.000"
+                          step="0.0001"
+                          placeholder="0.0000"
                           value={valorUnitarioDisplay}
                           onChange={handleValorUnitarioChange}
                         />
                       </FormControl>
                       <FormDescriptionValid>
-                        Preencha para calcular o total.
+                        Mín. 3 casas (ex: R$ 5,789).
                       </FormDescriptionValid>
                     </FormItem>
                   <FormField
@@ -867,7 +883,8 @@ export default function ControleAbastecimento() {
           </ResponsiveDialog>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Mudei o grid de 3 para 4 colunas para acomodar o novo filtro */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4"> 
           <Card>
             <CardHeader>
               <Label>Mês</Label>
@@ -908,6 +925,30 @@ export default function ControleAbastecimento() {
               </Select>
             </CardHeader>
           </Card>
+          
+          {/* NOVO FILTRO DE VEÍCULO */}
+          <Card>
+            <CardHeader>
+              <Label>Veículo</Label>
+              <Select
+                value={selectedPlaca.toString()}
+                onValueChange={(v) => setSelectedPlaca(v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os Veículos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os Veículos</SelectItem>
+                  {veiculosList.map((v) => (
+                    <SelectItem key={v.placa} value={v.placa}>
+                      {v.nome} - {v.placa}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </CardHeader>
+          </Card>
+          
           <Card>
             <CardHeader>
               <Label>Semana</Label>
@@ -935,9 +976,6 @@ export default function ControleAbastecimento() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {weeklyTotals
-            .filter(
-              (week) => selectedWeek === "all" || week.semana === selectedWeek
-            )
             .map((week) => (
               <Card key={week.semana}>
                 <CardHeader>
@@ -948,7 +986,7 @@ export default function ControleAbastecimento() {
                     {formatCurrency(week.reais)}
                   </p>
                   <p className="text-muted-foreground">
-                    {formatNumber(week.litros)} Litros
+                    {formatNumber(week.litros, 4)} Litros
                   </p>
                 </CardContent>
               </Card>
@@ -962,7 +1000,7 @@ export default function ControleAbastecimento() {
                 {formatCurrency(monthTotal.reais)}
               </p>
               <p className="text-lg text-muted-foreground">
-                {formatNumber(monthTotal.litros)} Litros
+                {formatNumber(monthTotal.litros, 4)} Litros
               </p>
             </CardContent>
           </Card>

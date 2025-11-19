@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Pencil, Gauge } from "lucide-react"; 
 import { Separator } from "@/components/ui/separator"; 
-import { formatCurrency, formatNumber, formatDate } from "@/lib/formatters";
+import { formatCurrency, formatNumber, formatDate, formatUnitPrice } from "@/lib/formatters";
 
 // Interface atualizada
 interface Abastecimento {
@@ -35,8 +35,8 @@ export function AbastecimentoCard({
 }: AbastecimentoCardProps) {
   
   const valorUnitario = abastecimento.quantidade_litros > 0
-    ? (abastecimento.valor_reais / abastecimento.quantidade_litros).toFixed(3)
-    : "0.000";
+    ? (abastecimento.valor_reais / abastecimento.quantidade_litros)
+    : 0;
 
   return (
     <Card>
@@ -58,7 +58,7 @@ export function AbastecimentoCard({
           <div className="text-right">
             <p className="text-xs font-medium text-muted-foreground">Quantidade</p>
             <p className="text-lg font-semibold">
-              {formatNumber(abastecimento.quantidade_litros)} L
+              {formatNumber(abastecimento.quantidade_litros, 4)} L
             </p>
           </div>
         </div>
@@ -76,7 +76,7 @@ export function AbastecimentoCard({
           <div>
             <p className="text-xs font-medium text-muted-foreground">Média</p>
             <p className="text-sm font-semibold text-green-600">
-              {abastecimento.media_km_l ? `${formatNumber(abastecimento.media_km_l)} km/L` : "N/A"}
+              {abastecimento.media_km_l ? `${formatNumber(abastecimento.media_km_l, 4)} km/L` : "N/A"}
             </p>
           </div>
         </div>
@@ -97,7 +97,9 @@ export function AbastecimentoCard({
           </div>
            <div>
             <p className="text-xs font-medium text-muted-foreground">Valor por Litro</p>
-            <p className="text-sm">R$ {valorUnitario}</p>
+            <p className="text-sm">
+              {formatUnitPrice(valorUnitario)}
+            </p>
           </div>
         </div>
 

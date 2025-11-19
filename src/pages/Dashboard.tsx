@@ -38,8 +38,19 @@ interface Filters {
   posto: string;
 }
 
-// --- Função de Fetch Atualizada e Blindada ---
-const fetchDashboardData = async (filters: Filters): Promise<DashboardData> => {
+// Tipo para o filtro de agregação (para o gráfico de pizza)
+type AggregateFilter = 'veiculo' | 'posto'; 
+
+// Opções para o filtro de limite (Top N)
+const LIMIT_OPTIONS = [
+  { value: "5", label: "Top 5" },
+  { value: "10", label: "Top 10" },
+  { value: "all", label: "Todos" },
+]
+
+
+// --- Função de Fetch ATUALIZADA para incluir o limite ---
+const fetchDashboardData = async (filters: Filters, limit: number): Promise<DashboardData> => {
   // 1. Prepara os parâmetros garantindo que "all" vira null
   const ano = parseInt(filters.ano, 10);
   const params = {
@@ -47,6 +58,7 @@ const fetchDashboardData = async (filters: Filters): Promise<DashboardData> => {
     p_combustivel: filters.combustivel === "all" ? null : filters.combustivel,
     p_placa: filters.placa === "all" ? null : filters.placa,
     p_posto: filters.posto === "all" ? null : filters.posto,
+    p_limit: limit, // NOVO: Passa o limite
   };
 
   // 2. Chamadas RPC paralelas para eficiência
@@ -55,7 +67,7 @@ const fetchDashboardData = async (filters: Filters): Promise<DashboardData> => {
       supabase.rpc("get_media_km_l_por_tipo", { p_tipo_veiculo: 'viatura', p_ano: ano }),
       supabase.rpc("get_media_km_l_por_tipo", { p_tipo_veiculo: 'maquinario', p_ano: ano }),
   ]);
-
+// ... (código para tratamento de erros)
   if (statsResponse.error) {
     console.error("Erro RPC (get_dashboard_stats):", statsResponse.error);
     throw new Error(statsResponse.error.message);
@@ -76,8 +88,8 @@ const fetchDashboardData = async (filters: Filters): Promise<DashboardData> => {
   const mediaKmLMaquinario = maquinarioMediaResponse.data?.[0]?.media || 0;
 
   // 4. Prepara os dados para o retorno
-  const COLORS_VEICULOS = ["#0ea5e9", "#22c55e", "#eab308", "#f97316", "#ef4444"];
-  const COLORS_POSTOS = ["#8b5cf6", "#ec4899", "#06b6d4"];
+  const COLORS_VEICULOS = ["#0ea5e9", "#22c55e", "#eab308", "#f97316", "#ef4444", "#3b82f6", "#10b981", "#f59e0b", "#f43f5e", "#6366f1"];
+  const COLORS_POSTOS = ["#8b5cf6", "#ec4899", "#06b6d4", "#a855f7", "#db2777", "#0ea5e9", "#14b8a6", "#fbbf24", "#7c3aed", "#e11d48"];
 
   const safeData = statsResponse.data || {
       total_gasto_ano: 0,
@@ -138,10 +150,18 @@ export default function Dashboard() {
     placa: "all",
     posto: "all"
   });
+  
+  // NOVO ESTADO: Controla qual gráfico de pizza está ativo
+  const [selectedAggregate, setSelectedAggregate] = useState<AggregateFilter>('veiculo'); 
+  
+  // NOVO ESTADO: Controla o limite de itens exibidos (Top N)
+  const [topLimit, setTopLimit] = useState<string>("5"); 
+
 
   const { data: stats, isLoading, error } = useQuery<DashboardData>({
-    queryKey: ["dashboard", filters],
-    queryFn: () => fetchDashboardData(filters),
+    // ATUALIZADO: Inclui topLimit na queryKey e na função de fetch
+    queryKey: ["dashboard", filters, topLimit],
+    queryFn: () => fetchDashboardData(filters, topLimit === "all" ? 0 : parseInt(topLimit)),
     retry: 1
   });
 
@@ -161,22 +181,116 @@ export default function Dashboard() {
       placa: "all",
       posto: "all"
     });
+    setTopLimit("5"); // Reseta o limite para Top 5
   };
 
   const hasActiveFilters = filters.combustivel !== "all" || filters.placa !== "all" || filters.posto !== "all";
 
+  // NOVO: Função para renderizar o gráfico de pizza correto
+  const renderPieChart = (stats: DashboardData) => {
+      const dataKey = selectedAggregate === 'veiculo' ? 'gastos_por_veiculo' : 'gastos_por_posto';
+      const chartData = stats[dataKey];
+      const title = selectedAggregate === 'veiculo' ? `Top ${topLimit === 'all' ? 'Todos' : topLimit} Veículos por Gasto` : `Distribuição por Posto`;
+
+      if (chartData.length === 0) {
+        return (
+          <Card className="col-span-2 lg:col-span-1">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">{title}</CardTitle>
+            </CardHeader>
+            <div className="flex items-center justify-center text-muted-foreground text-sm w-full h-[350px]">
+              Sem dados para {selectedAggregate === 'veiculo' ? 'veículos' : 'postos'} com o filtro atual.
+            </div>
+          </Card>
+        );
+      }
+      
+      const totalGasto = chartData.reduce((sum, item) => sum + item.total, 0);
+
+      return (
+        <Card className="col-span-2 lg:col-span-1">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-lg">{title}</CardTitle>
+            {/* NOVO: Div para conter ambos os Selects de controle */}
+            <div className="flex space-x-2">
+              {/* Seletor de Limite (Top N) */}
+              <Select
+                value={topLimit}
+                onValueChange={setTopLimit}
+                disabled={selectedAggregate !== 'veiculo'} // Opcional: Só permite Top N para Veículos (se Postos for sempre Todos)
+              >
+                <SelectTrigger className="w-[100px] h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LIMIT_OPTIONS.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Seletor de Agregação (Veículo/Posto) */}
+              <Select
+                value={selectedAggregate}
+                onValueChange={(v: AggregateFilter) => {
+                  setSelectedAggregate(v);
+                  // Reseta o limite para 5 quando muda para Posto, se necessário, ou mantém "Todos"
+                  // setTopLimit("5"); 
+                }}
+              >
+                <SelectTrigger className="w-[150px] h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="veiculo">Top Veículos</SelectItem>
+                  <SelectItem value="posto">Por Posto</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center justify-center h-[350px]"> 
+            <ChartContainer config={{}} className="h-full w-full">
+              <PieChart>
+                <ChartTooltip 
+                  content={<ChartTooltipContent 
+                    hideLabel 
+                    nameKey="nome" 
+                    formatter={(value, name) => [`${formatCurrency(Number(value))} (${((Number(value) / totalGasto) * 100).toFixed(1)}%)`, name]}
+                  />} 
+                />
+                <Pie
+                  data={chartData}
+                  dataKey="total"
+                  nameKey="nome"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={70} 
+                  outerRadius={100} 
+                  paddingAngle={3} 
+                  // Rótulos que mostram Nome e Percentagem
+                  label={({ name, percent }) => `${name.split(' ')[0]} (${(percent * 100).toFixed(1)}%)`} 
+                  labelLine={true} 
+                >
+                  {chartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                  ))}
+                </Pie>
+                <ChartLegend 
+                  content={<ChartLegendContent nameKey="nome" />} 
+                  className="flex flex-wrap justify-center pt-4 max-h-[100px] overflow-y-auto" 
+                  verticalAlign="bottom"
+                />
+              </PieChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+      );
+    };
+
   if (isLoading) return <Layout><ListSkeleton /></Layout>;
   
   if (error) {
-      return (
-          <Layout>
-              <div className="p-8 text-center text-destructive">
-                  <h3 className="text-lg font-bold">Erro ao carregar dashboard</h3>
-                  <p>{error.message}</p>
-                  <Button variant="outline" onClick={() => window.location.reload()} className="mt-4">Tentar Novamente</Button>
-              </div>
-          </Layout>
-      );
+// ... (tratamento de erro)
   }
 
   if (!stats) return <Layout><div>Sem dados disponíveis</div></Layout>;
@@ -185,7 +299,7 @@ export default function Dashboard() {
     <Layout>
       <div className="space-y-6">
         
-        {/* --- Header e Filtros (Não alterado) --- */}
+        {/* --- Header e Filtros --- */}
         <div className="flex flex-col space-y-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
@@ -285,7 +399,7 @@ export default function Dashboard() {
           />
         </div>
         
-        {/* --- Gráficos (Não alterado) --- */}
+        {/* --- Gráficos Corrigidos --- */}
         <div className="grid gap-6 md:grid-cols-2">
           
           {/* Barras: Gasto Mensal */}
@@ -319,72 +433,9 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Pizza: Veículos e Postos */}
-          <div className="grid gap-6 grid-rows-2">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Top 5 Veículos (Gastos)</CardTitle>
-              </CardHeader>
-              <CardContent className="flex justify-center h-[200px]">
-                {stats.gastos_por_veiculo.length > 0 ? (
-                  <ChartContainer config={{}} className="h-full w-full">
-                    <PieChart>
-                      <ChartTooltip content={<ChartTooltipContent hideLabel nameKey="nome" formatter={(value) => formatCurrency(Number(value))} />} />
-                      <Pie
-                        data={stats.gastos_por_veiculo}
-                        dataKey="total"
-                        nameKey="nome"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={50}
-                        outerRadius={70}
-                        paddingAngle={2}
-                      >
-                        {stats.gastos_por_veiculo.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.fill} />
-                        ))}
-                      </Pie>
-                      <ChartLegend content={<ChartLegendContent nameKey="nome" />} className="-translate-y-2 flex-wrap gap-2 [&>*]:basis-1/4 [&>*]:justify-center" />
-                    </PieChart>
-                  </ChartContainer>
-                ) : (
-                  <div className="flex items-center justify-center text-muted-foreground text-sm w-full">Sem dados para este filtro</div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Distribuição por Posto</CardTitle>
-              </CardHeader>
-              <CardContent className="flex justify-center h-[200px]">
-                 {stats.gastos_por_posto.length > 0 ? (
-                  <ChartContainer config={{}} className="h-full w-full">
-                    <PieChart>
-                      <ChartTooltip content={<ChartTooltipContent hideLabel nameKey="nome" formatter={(value) => formatCurrency(Number(value))} />} />
-                      <Pie
-                        data={stats.gastos_por_posto}
-                        dataKey="total"
-                        nameKey="nome"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={50}
-                        outerRadius={70}
-                        paddingAngle={2}
-                      >
-                        {stats.gastos_por_posto.map((entry, index) => (
-                          <Cell key={`cell-p-${index}`} fill={entry.fill} />
-                        ))}
-                      </Pie>
-                      <ChartLegend content={<ChartLegendContent nameKey="nome" />} />
-                    </PieChart>
-                  </ChartContainer>
-                 ) : (
-                  <div className="flex items-center justify-center text-muted-foreground text-sm w-full">Sem dados para este filtro</div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+          {/* NOVO: Gráfico de Pizza Dinâmico e Legível */}
+          {renderPieChart(stats)}
+          
         </div>
       </div>
     </Layout>

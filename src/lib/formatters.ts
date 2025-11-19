@@ -4,8 +4,9 @@ export const formatCurrency = (value: number, precise = false) => {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
-    minimumFractionDigits: precise ? 4 : 2,
-    maximumFractionDigits: precise ? 4 : 2,
+    // Para valores monetários (totais), usamos 2 casas.
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(value);
 };
 
@@ -22,9 +23,22 @@ export const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString("pt-BR");
 };
 
-export const formatNumber = (value: number, decimals = 2) => {
+export const formatNumber = (value: number, decimals = 4) => {
+  // O padrão agora é 4 casas decimais para Litros e Médias, para maior precisão.
+  const finalDecimals = decimals;
+
   return new Intl.NumberFormat("pt-BR", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
+    minimumFractionDigits: finalDecimals,
+    maximumFractionDigits: finalDecimals,
+  }).format(value);
+};
+
+// NOVO FORMATTER PARA PREÇO UNITÁRIO (R$/L), COM MÍNIMO DE 3 E MÁXIMO DE 4 CASAS.
+export const formatUnitPrice = (value: number) => {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 4,
   }).format(value);
 };
