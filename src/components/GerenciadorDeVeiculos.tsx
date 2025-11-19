@@ -59,6 +59,10 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 
+// --- NOVO IMPORT ---
+import { FichaRelatorioDialog } from "./FichaRelatorioDialog"; 
+// --- FIM NOVO ---
+
 const ITEMS_PER_PAGE = 10;
 
 interface Veiculo {
@@ -281,6 +285,14 @@ export function GerenciadorDeVeiculos({
             veiculo={veiculo}
             icon={Icon}
             onEdit={() => handleEdit(veiculo)}
+            // --- NOVO: Adiciona o botão de Relatório no Card Mobile ---
+            extraAction={
+                <FichaRelatorioDialog 
+                    veiculo={veiculo} 
+                    tipoVeiculo={supabaseTable}
+                />
+            }
+            // --- FIM NOVO ---
             deleteAction={
               canDelete && (
                 <AlertDialog>
@@ -327,7 +339,7 @@ export function GerenciadorDeVeiculos({
             <TableHead>Cartão</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Anotações</TableHead>
-            <TableHead className="w-[100px]">Ações</TableHead>
+            <TableHead className="w-[150px] text-right">Ações</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -344,8 +356,14 @@ export function GerenciadorDeVeiculos({
                 </Badge>
               </TableCell>
               <TableCell className="max-w-xs truncate">{veiculo.anotacoes || "-"}</TableCell>
-              <TableCell>
-                <div className="flex gap-2">
+              <TableCell className="text-right">
+                <div className="flex gap-2 justify-end">
+                  {/* --- NOVO: Adiciona o botão de Relatório na Tabela Desktop --- */}
+                  <FichaRelatorioDialog 
+                      veiculo={veiculo} 
+                      tipoVeiculo={supabaseTable}
+                  />
+                  {/* --- FIM NOVO --- */}
                   <Button
                     variant="ghost"
                     size="icon"

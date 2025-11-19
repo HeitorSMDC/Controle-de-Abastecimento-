@@ -378,7 +378,11 @@ export type Database = {
     Functions: {
       get_dashboard_stats: {
         Args: {
-          ano_selecionado: number
+          p_ano: number
+          p_combustivel: string
+          p_placa: string
+          p_posto: string
+          p_limit: number
         }
         Returns: Json
       }
@@ -406,7 +410,6 @@ export type Database = {
           total_count: number
         }[]
       }
-      # Adição da nova função RPC (Passo 1)
       get_media_km_l_por_tipo: {
         Args: {
           p_tipo_veiculo: string
@@ -416,13 +419,25 @@ export type Database = {
           media: number
         }[]
       }
-      # Adição da nova função RPC (Passo 2)
       delete_user: {
         Args: {
           user_to_delete_id: string
         }
         Returns: void
       }
+      
+      -- --- NOVO: Função de Relatório por Veículo ---
+      get_relatorio_veiculo: {
+        Args: {
+          p_placa: string
+          p_ano: number
+          p_mes?: number
+          p_semana?: number
+        }
+        Returns: Json
+      }
+      -- --- FIM NOVO ---
+      
     }
     Enums: {
       app_role: "admin" | "coordenador" | "usuario"

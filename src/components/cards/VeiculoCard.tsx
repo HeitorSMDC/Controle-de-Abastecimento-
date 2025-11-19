@@ -23,9 +23,10 @@ interface VeiculoCardProps {
   icon: LucideIcon;
   onEdit: () => void;
   deleteAction: React.ReactNode;
+  extraAction: React.ReactNode; // <<-- ADICIONE ESTA LINHA
 }
 
-export function VeiculoCard({ veiculo, icon: Icon, onEdit, deleteAction }: VeiculoCardProps) {
+export function VeiculoCard({ veiculo, icon: Icon, onEdit, deleteAction, extraAction }: VeiculoCardProps) {
   const statusLabel = statusOptionsVeiculos.find(s => s.value === veiculo.status)?.label;
   const statusVariant = statusVariantMapVeiculos[veiculo.status] || "outline";
 
@@ -62,6 +63,8 @@ export function VeiculoCard({ veiculo, icon: Icon, onEdit, deleteAction }: Veicu
         </div>
 
         <div className="flex w-full gap-2 pt-2">
+          {/* O novo botão de relatório será renderizado aqui */}
+          {extraAction}
           <Button variant="outline" size="sm" className="w-full" onClick={onEdit}>
             <Pencil className="mr-2 h-4 w-4" />
             Editar
