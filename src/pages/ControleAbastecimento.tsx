@@ -12,7 +12,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Gauge, Search } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { formatCurrency, formatNumber, formatDate, formatUnitPrice } from "@/lib/formatters";
+import { 
+  formatCurrency, 
+  formatNumber, 
+  formatDate, 
+  formatUnitPrice, 
+  getDateObjectForWeekCalculation // <--- IMPORTAÇÃO NOVA
+} from "@/lib/formatters";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -46,38 +52,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { AbastecimentoCard } from "@/components/cards/AbastecimentoCard";
 import { ListSkeleton } from "@/components/ListSkeleton";
 
-interface VeiculoSelecao {
-  placa: string;
-  nome: string;
-  cartao: string | null;
-}
-interface MotoristaSelecao {
-  matricula: string;
-  nome: string;
-}
-interface PostoSelecao {
-  id: string;
-  nome: string;
-}
-
-interface Abastecimento {
-  id: string;
-  data: string;
-  veiculo: string;
-  placa: string;
-  cartao: string | null;
-  motorista: string;
-  matricula: string;
-  quantidade_litros: number;
-  valor_reais: number;
-  semana: number;
-  mes: number;
-  ano: number;
-  odometro: number | null;
-  km_percorridos: number | null;
-  media_km_l: number | null;
-  posto: string | null;
-}
+// --- ATUALIZADO: Tipos importados do ficheiro central ---
+import { Abastecimento, VeiculoSelecao, MotoristaSelecao, PostoSelecao } from "@/types";
 
 const getWeekNumber = (date: Date): number => {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
@@ -96,7 +72,7 @@ const fetchAbastecimentos = async (mes: number, ano: number) => {
     .order("data", { ascending: false });
 
   if (error) throw error;
-  return data || [];
+  return (data as Abastecimento[]) || [];
 };
 
 const fetchViaturas = async () => {
@@ -253,12 +229,11 @@ export default function ControleAbastecimento() {
         throw new Error(zodError.errors.map((e) => e.message).join(", "));
       }
 
-      // Pegamos a string YYYY-MM-DD
-      const [ano, mes, dia] = validatedData.data.split("-").map(Number);
+      // --- CORREÇÃO DE TIMEZONE: Usando a nova função de formatação ---
+      const dataObj = getDateObjectForWeekCalculation(validatedData.data);
       
-      // Criamos a data com hora 12:00:00 para evitar problemas de fuso horário
-      const dataObj = new Date(ano, mes - 1, dia, 12, 0, 0);
-      
+      const ano = dataObj.getFullYear();
+      const mes = dataObj.getMonth() + 1; // getMonth é 0-indexado
       const semana = getWeekNumber(dataObj);
 
       const record = {
@@ -267,7 +242,7 @@ export default function ControleAbastecimento() {
         mes,
         semana,
         odometro: validatedData.odometro,
-        // Garantimos que salvamos a string original da data
+        // Garantimos que salvamos a string original da data YYYY-MM-DD
         data: validatedData.data 
       };
 

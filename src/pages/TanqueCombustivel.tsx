@@ -6,70 +6,49 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Plus, Droplet } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ResponsiveDialog } from "@/components/ResponsiveDialog";
 import { ListSkeleton } from "@/components/ListSkeleton";
 import { EmptyState } from "@/components/EmptyState";
-import { TanqueCard, Tanque } from "@/components/cards/TanqueCard"; // Importamos o Card e o Tipo
-import { combustivelOptions } from "@/lib/constants"; // Reutilizamos as opções
-
+import { TanqueCard } from "@/components/cards/TanqueCard"; 
+import { combustivelOptions } from "@/lib/constants"; 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { tanqueSchema, TanqueFormData, tanqueMovimentacaoSchema, TanqueMovimentacaoFormData } from "@/lib/validations";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
 
-// Tipos locais para os formulários
-type MovimentacaoType = "entrada" | "saida";
+// --- IMPORTAÇÕES PADRONIZADAS ---
+import { Tanque, TipoMovimentacaoTanque } from "@/types";
 
-// Função para buscar os tanques
 const fetchTanques = async () => {
   const { data, error } = await supabase
     .from("tanques")
     .select("*")
     .order("nome");
   if (error) throw error;
-  return data || [];
+  return (data as Tanque[]) || [];
 };
 
 export default function TanqueCombustivel() {
-  const { user, userRole } = useAuth();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  // Estados dos Dialogs (Modais)
   const [isTanqueDialogOpen, setIsTanqueDialogOpen] = useState(false);
   const [isMovimentacaoDialogOpen, setIsMovimentacaoDialogOpen] = useState(false);
   
-  // Estados para edição
   const [editingTanque, setEditingTanque] = useState<Tanque | null>(null);
   
-  // Estados para nova movimentação
-  const [movimentacaoInfo, setMovimentacaoInfo] = useState<{ tanque: Tanque; tipo: MovimentacaoType } | null>(null);
+  const [movimentacaoInfo, setMovimentacaoInfo] = useState<{ tanque: Tanque; tipo: TipoMovimentacaoTanque } | null>(null);
 
-  // Busca de dados
   const { data: tanques = [], isLoading } = useQuery<Tanque[]>({
     queryKey: ["tanques"],
     queryFn: fetchTanques,
   });
 
-  // Formulário para Criar/Editar Tanque
   const tanqueForm = useForm<TanqueFormData>({
     resolver: zodResolver(tanqueSchema),
     defaultValues: {
@@ -80,7 +59,6 @@ export default function TanqueCombustivel() {
     },
   });
 
-  // Formulário para Movimentação (Entrada/Saída)
   const movimentacaoForm = useForm<TanqueMovimentacaoFormData>({
     resolver: zodResolver(tanqueMovimentacaoSchema),
     defaultValues: {
@@ -89,12 +67,11 @@ export default function TanqueCombustivel() {
       litros: 0,
       valor_reais: "",
       responsavel_id: user?.id || "",
-      responsavel_nome: "", // Buscaremos o nome
+      responsavel_nome: "", 
       observacao: "",
     },
   });
 
-  // Busca o nome do perfil do utilizador logado para o form
   useState(() => {
     if (user) {
       supabase.from("profiles").select("nome").eq("user_id", user.id).single()
@@ -107,10 +84,6 @@ export default function TanqueCombustivel() {
     }
   }, [user, movimentacaoForm]);
 
-
-  // --- MUTAÇÕES ---
-
-  // Salvar (Criar/Editar) Tanque
   const { mutate: salvarTanque, isPending: isSavingTanque } = useMutation({
     mutationFn: async (data: TanqueFormData) => {
       let response;
@@ -132,7 +105,6 @@ export default function TanqueCombustivel() {
     },
   });
 
-  // Salvar Movimentação (Entrada/Saída)
   const { mutate: salvarMovimentacao, isPending: isSavingMovimentacao } = useMutation({
     mutationFn: async (data: TanqueMovimentacaoFormData) => {
       const { tanque_id, tipo, litros, observacao, responsavel_id, responsavel_nome } = data;
@@ -153,15 +125,12 @@ export default function TanqueCombustivel() {
     onSuccess: () => {
       toast.success(`Movimentação registrada com sucesso!`);
       setIsMovimentacaoDialogOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["tanques"] }); // Invalida os tanques (para atualizar litros_atuais)
+      queryClient.invalidateQueries({ queryKey: ["tanques"] });
     },
     onError: (error: any) => {
       toast.error(error.message || "Erro ao registar movimentação");
     },
   });
-
-
-  // --- Handlers (Funções de clique) ---
 
   const handleOpenNovoTanque = () => {
     setEditingTanque(null);
@@ -185,7 +154,7 @@ export default function TanqueCombustivel() {
     setIsTanqueDialogOpen(true);
   };
 
-  const handleOpenMovimentacao = (tanque: Tanque, tipo: MovimentacaoType) => {
+  const handleOpenMovimentacao = (tanque: Tanque, tipo: TipoMovimentacaoTanque) => {
     setMovimentacaoInfo({ tanque, tipo });
     movimentacaoForm.reset({
       tanque_id: tanque.id,
@@ -193,7 +162,7 @@ export default function TanqueCombustivel() {
       litros: 0,
       valor_reais: "",
       responsavel_id: user?.id || "",
-      responsavel_nome: movimentacaoForm.getValues("responsavel_nome"), // Mantém o nome já buscado
+      responsavel_nome: movimentacaoForm.getValues("responsavel_nome"),
       observacao: "",
     });
     setIsMovimentacaoDialogOpen(true);
@@ -206,9 +175,6 @@ export default function TanqueCombustivel() {
   const onSubmitMovimentacao = (data: TanqueMovimentacaoFormData) => {
     salvarMovimentacao(data);
   };
-
-
-  // --- Renderização ---
 
   const renderContent = () => {
     if (isLoading) {
@@ -240,7 +206,6 @@ export default function TanqueCombustivel() {
     );
   };
   
-
   return (
     <Layout>
       <div className="space-y-6">
@@ -255,7 +220,6 @@ export default function TanqueCombustivel() {
         {renderContent()}
       </div>
 
-      {/* Dialog para Criar/Editar Tanque */}
       <ResponsiveDialog
         open={isTanqueDialogOpen}
         onOpenChange={setIsTanqueDialogOpen}
@@ -325,7 +289,7 @@ export default function TanqueCombustivel() {
                     <FormControl>
                       <Input type="number" {...field}
                        onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
-                       disabled={!!editingTanque} // Só permite editar na criação
+                       disabled={!!editingTanque} 
                       />
                     </FormControl>
                     {editingTanque && <FormDescription>O nível atual é atualizado por movimentações.</FormDescription>}
@@ -341,7 +305,6 @@ export default function TanqueCombustivel() {
         </Form>
       </ResponsiveDialog>
 
-      {/* Dialog para Movimentação (Entrada/Saída) */}
       <ResponsiveDialog
         open={isMovimentacaoDialogOpen}
         onOpenChange={setIsMovimentacaoDialogOpen}
@@ -366,7 +329,6 @@ export default function TanqueCombustivel() {
                   </FormItem>
                 )}
               />
-              {/* Mostra o valor apenas se for 'entrada' */}
               {movimentacaoInfo?.tipo === 'entrada' && (
                 <FormField
                   control={movimentacaoForm.control}

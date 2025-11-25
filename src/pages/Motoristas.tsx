@@ -1,66 +1,34 @@
 // src/pages/Motoristas.tsx
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Users, Search } from "lucide-react";
 import { PasswordField } from "@/components/PasswordField";
 import { EmptyState } from "@/components/EmptyState";
-
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motoristaSchema, MotoristaFormData } from "@/lib/validations";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ResponsiveDialog } from "@/components/ResponsiveDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { MotoristaCard } from "@/components/cards/MotoristaCard";
 import { ListSkeleton } from "@/components/ListSkeleton";
-
 import { useDebounce } from "@/hooks/use-debounce";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+
+// --- IMPORTAÇÃO PADRONIZADA ---
+import { Motorista } from "@/types";
 
 const ITEMS_PER_PAGE = 10;
-
-interface Motorista {
-  id: string;
-  nome: string;
-  matricula: string;
-  senha: string;
-}
 
 const fetchMotoristas = async (page: number, searchTerm: string) => {
   const from = (page - 1) * ITEMS_PER_PAGE;
@@ -81,9 +49,8 @@ const fetchMotoristas = async (page: number, searchTerm: string) => {
   const { data, error, count } = await query;
 
   if (error) throw error;
-  return { data: data || [], count: count || 0 };
+  return { data: (data as Motorista[]) || [], count: count || 0 };
 };
-
 
 export default function Motoristas() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -110,25 +77,20 @@ export default function Motoristas() {
     queryFn: () => fetchMotoristas(page, debouncedSearchTerm),
   });
 
-  const motoristas: Motorista[] = data?.data || [];
+  const motoristas = data?.data || [];
   const totalCount = data?.count || 0;
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
 
   const { mutate: salvarMotorista, isPending: isSaving } = useMutation({
     mutationFn: async (data: MotoristaFormData) => {
-      const { data: validatedData, error: zodError } = motoristaSchema.safeParse(data);
-      if (zodError) {
-        throw new Error(zodError.errors.map((e) => e.message).join(", "));
-      }
-      
       let response;
       if (editingId) {
         response = await supabase
           .from("motoristas")
-          .update(validatedData)
+          .update(data)
           .eq("id", editingId);
       } else {
-        response = await supabase.from("motoristas").insert(validatedData);
+        response = await supabase.from("motoristas").insert(data);
       }
 
       const { error } = response;
@@ -185,7 +147,7 @@ export default function Motoristas() {
     form.reset({
       nome: motorista.nome,
       matricula: motorista.matricula,
-      senha: motorista.senha,
+      senha: motorista.senha || "",
     });
     setEditingId(motorista.id);
     setIsDialogOpen(true);
@@ -200,7 +162,6 @@ export default function Motoristas() {
   useEffect(() => {
     setPage(1);
   }, [debouncedSearchTerm]);
-
 
   const canEdit = userRole === "admin" || userRole === "coordenador";
 
@@ -298,8 +259,8 @@ export default function Motoristas() {
               <TableCell>{motorista.matricula}</TableCell>
               <TableCell>
                 <PasswordField
-                  value={motorista.senha}
-                  onChange={() => {}} // Apenas leitura
+                  value={motorista.senha || ""}
+                  onChange={() => {}}
                   readOnly
                   placeholder="••••••••"
                 />
@@ -387,7 +348,6 @@ export default function Motoristas() {
     );
   };
   
-
   return (
     <Layout>
       <div className="space-y-6">
@@ -436,7 +396,7 @@ export default function Motoristas() {
                 <FormField
                   control={form.control}
                   name="senha"
-                  render={({ field: { onChange, value, ref } }) => ( // --- CORREÇÃO AQUI ---
+                  render={({ field: { onChange, value, ref } }) => (
                     <FormItem>
                       <FormLabel>Senha (Anotação)</FormLabel>
                       <FormControl>
@@ -444,9 +404,9 @@ export default function Motoristas() {
                           id="senha"
                           placeholder="Digite a senha para anotação"
                           required
-                          ref={ref} // Passa a ref
-                          value={value} // Passa o valor
-                          onChange={onChange} // Passa o onChange que espera o string
+                          ref={ref}
+                          value={value}
+                          onChange={onChange}
                         />
                       </FormControl>
                       <p className="text-xs text-muted-foreground">

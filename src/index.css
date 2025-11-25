@@ -119,3 +119,44 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+/* src/index.css */
+
+/* ... seu código existente ... */
+
+@media print {
+  /* Esconde tudo por padrão */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Mostra apenas a área de impressão e seus filhos */
+  #area-de-impressao,
+  #area-de-impressao * {
+    visibility: visible;
+  }
+
+  /* Posiciona o relatório no topo da folha e remove sombras/scrolls */
+  #area-de-impressao {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 2cm; /* Margem da folha impressa */
+    background: white;
+    z-index: 9999;
+    overflow: visible !important;
+  }
+
+  /* Remove barras de rolagem e elementos fixos da UI */
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  
+  /* Esconde elementos específicos que não queremos na impressão dentro do relatório (como botões se houver) */
+  .no-print {
+    display: none !important;
+  }
+}

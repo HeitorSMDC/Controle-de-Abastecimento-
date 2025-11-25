@@ -1,39 +1,24 @@
 // src/lib/formatters.ts
 
-export const formatCurrency = (value: number, precise = false) => {
+// Formata valores monetários (R$)
+export const formatCurrency = (value: number) => {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
-    // Para valores monetários (totais), usamos 2 casas.
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value);
 };
 
-export const formatDate = (dateString: string) => {
-  if (!dateString) return "-";
-  
-  // Correção de Fuso Horário para datas YYYY-MM-DD
-  // Força a exibição exata da string, sem conversão de timezone do navegador
-  if (dateString.includes('-') && dateString.length === 10) {
-     const [year, month, day] = dateString.split('-');
-     return `${day}/${month}/${year}`;
-  }
-  
-  return new Date(dateString).toLocaleDateString("pt-BR");
-};
-
+// Formata números decimais (Litros, Km, Médias)
 export const formatNumber = (value: number, decimals = 4) => {
-  // O padrão agora é 4 casas decimais para Litros e Médias, para maior precisão.
-  const finalDecimals = decimals;
-
   return new Intl.NumberFormat("pt-BR", {
-    minimumFractionDigits: finalDecimals,
-    maximumFractionDigits: finalDecimals,
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
   }).format(value);
 };
 
-// NOVO FORMATTER PARA PREÇO UNITÁRIO (R$/L), COM MÍNIMO DE 3 E MÁXIMO DE 4 CASAS.
+// Formata preço unitário (ex: R$ 5,899)
 export const formatUnitPrice = (value: number) => {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -41,4 +26,39 @@ export const formatUnitPrice = (value: number) => {
     minimumFractionDigits: 3,
     maximumFractionDigits: 4,
   }).format(value);
+};
+
+/**
+ * Formata uma data de forma segura contra Timezones.
+ * Se a data for "YYYY-MM-DD", exibe exatamente esse dia.
+ * Se for ISO com hora, converte para local.
+ */
+export const formatDate = (dateString: string | null | undefined) => {
+  if (!dateString) return "-";
+  
+  // Se a string for exatamente YYYY-MM-DD (10 chars), evitamos o new Date() direto
+  // para não sofrer com o fuso horário UTC vs Local.
+  if (dateString.length === 10 && dateString.includes('-')) {
+     const [year, month, day] = dateString.split('-');
+     return `${day}/${month}/${year}`;
+  }
+  
+  // Para timestamps completos (com hora), usamos a conversão padrão
+  try {
+    return new Date(dateString).toLocaleDateString("pt-BR");
+  } catch (e) {
+    return dateString; // Fallback se a data for inválida
+  }
+};
+
+/**
+ * Função auxiliar para formulários.
+ * Pega numa data YYYY-MM-DD e garante que obtemos o número da semana correto,
+ * evitando problemas de fuso horário ao instanciar o objeto Date.
+ */
+export const getDateObjectForWeekCalculation = (dateString: string): Date => {
+  // Cria a data ao meio-dia (12:00) para garantir que qualquer desvio de fuso horário
+  // (que raramente é maior que 12h) não mude o dia da semana ou do mês.
+  const [ano, mes, dia] = dateString.split("-").map(Number);
+  return new Date(ano, mes - 1, dia, 12, 0, 0);
 };

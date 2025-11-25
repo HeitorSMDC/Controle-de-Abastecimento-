@@ -1,115 +1,41 @@
 // src/pages/Manutencao.tsx
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label"; // Importação mantida, pode ser útil
+import { Label } from "@/components/ui/label"; 
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Plus, Trash2, ExternalLink, Edit, Wrench, Search } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { manutencaoSchema, ManutencaoFormData } from "@/lib/validations";
-import {
-  Form,
-  FormControl,
-  FormDescription as FormDescriptionValid, // Renomeado
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription as AlertDialogDescriptionValid, // Renomeado
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-
-import {
-  statusOptionsManutencao,
-  statusVariantMapManutencao,
-} from "@/lib/constants";
-
+import { Form, FormControl, FormDescription as FormDescriptionValid, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription as AlertDialogDescriptionValid, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { statusOptionsManutencao, statusVariantMapManutencao } from "@/lib/constants";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { EmptyState } from "@/components/EmptyState";
 import { ResponsiveDialog } from "@/components/ResponsiveDialog";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"; // Adicionado DialogDescription
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"; 
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ManutencaoCard } from "@/components/cards/ManutencaoCard";
 import { Separator } from "@/components/ui/separator";
 import { ListSkeleton } from "@/components/ListSkeleton";
-
 import { useDebounce } from "@/hooks/use-debounce";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+
+// --- IMPORTAÇÕES PADRONIZADAS ---
+import { Manutencao, VeiculoSelecao } from "@/types";
+import { formatDate, formatCurrency } from "@/lib/formatters";
 
 const ITEMS_PER_PAGE = 10;
-
-type StatusManutencao = "pendente" | "em_andamento" | "concluida" | "cancelada";
-
-interface Manutencao {
-  id: string;
-  placa: string;
-  tipo_veiculo: string;
-  veiculo_nome: string;
-  descricao_problema: string;
-  pecas_necessarias: string[] | null;
-  links_pecas: string[] | null;
-  status: StatusManutencao;
-  data_registro: string;
-  data_conclusao: string | null;
-  custo_estimado: number | null;
-  custo_real: number | null;
-  observacoes: string | null;
-  nf_numero: string | null;
-  nf_data: string | null;
-  nf_fornecedor: string | null;
-}
-
-interface Veiculo {
-  placa: string;
-  nome: string;
-}
 
 const fetchManutencoes = async (page: number, searchTerm: string) => {
   const from = (page - 1) * ITEMS_PER_PAGE;
@@ -129,22 +55,21 @@ const fetchManutencoes = async (page: number, searchTerm: string) => {
   
   const { data, error, count } = await query;
   if (error) throw error;
-  return { data: data || [], count: count || 0 };
+  return { data: (data as Manutencao[]) || [], count: count || 0 };
 };
 
 const fetchViaturas = async () => {
   const { data, error } = await supabase.from("viaturas").select("placa, nome");
   if (error) throw error;
-  return data || [];
+  return (data as VeiculoSelecao[]) || [];
 };
 const fetchMaquinarios = async () => {
   const { data, error } = await supabase.from("maquinario").select("placa, nome");
   if (error) throw error;
-  return data || [];
+  return (data as VeiculoSelecao[]) || [];
 };
 
-
-export default function Manutencao() {
+export default function ManutencaoPage() { // Renomeei para evitar conflito com o tipo
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -184,22 +109,21 @@ export default function Manutencao() {
     queryFn: () => fetchManutencoes(page, debouncedSearchTerm),
   });
   
-  const manutencoes: Manutencao[] = data?.data || [];
+  const manutencoes = data?.data || [];
   const totalCount = data?.count || 0;
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
 
-  const { data: viaturas = [] } = useQuery<Veiculo[]>({
+  const { data: viaturas = [] } = useQuery<VeiculoSelecao[]>({
     queryKey: ["viaturas"],
     queryFn: fetchViaturas,
   });
-  const { data: maquinarios = [] } = useQuery<Veiculo[]>({
+  const { data: maquinarios = [] } = useQuery<VeiculoSelecao[]>({
     queryKey: ["maquinario"],
     queryFn: fetchMaquinarios,
   });
   
   const { mutate: salvarManutencao, isPending: isSaving } = useMutation({
     mutationFn: async (data: ManutencaoFormData) => {
-      // Converte strings vazias de 'custo' para null e strings de array para arrays
       const record = {
         ...data,
         pecas_necessarias: data.pecas_necessarias ? data.pecas_necessarias.split(",").map(p => p.trim()) : null,
@@ -215,16 +139,12 @@ export default function Manutencao() {
 
       let response;
       if (editingId) {
-        response = await supabase
-          .from("manutencoes")
-          .update(record)
-          .eq("id", editingId);
+        response = await supabase.from("manutencoes").update(record).eq("id", editingId);
       } else {
         response = await supabase.from("manutencoes").insert(record);
       }
 
-      const { error } = response;
-      if (error) throw error;
+      if (response.error) throw response.error;
       return editingId ? "Manutenção atualizada!" : "Manutenção registrada!";
     },
     onSuccess: (message) => {
@@ -234,7 +154,6 @@ export default function Manutencao() {
       queryClient.invalidateQueries({ queryKey: ["manutencoes"] });
     },
     onError: (error: any) => {
-      console.error("Erro ao salvar:", error);
       toast.error(error.message || "Erro ao salvar manutenção");
     },
   });
@@ -243,10 +162,9 @@ export default function Manutencao() {
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("manutencoes").delete().eq("id", id);
       if (error) throw error;
-      return "Manutenção excluída com sucesso!";
     },
-    onSuccess: (message) => {
-      toast.success(message);
+    onSuccess: () => {
+      toast.success("Manutenção excluída com sucesso!");
       queryClient.invalidateQueries({ queryKey: ["manutencoes"] });
       if (manutencoes.length === 1 && page > 1) {
         setPage(page - 1);
@@ -257,7 +175,6 @@ export default function Manutencao() {
     }
   });
 
-
   const onSubmit = (data: ManutencaoFormData) => {
     salvarManutencao(data);
   };
@@ -265,7 +182,7 @@ export default function Manutencao() {
   const handleEdit = (manutencao: Manutencao) => {
     form.reset({
       ...manutencao,
-      data_registro: manutencao.data_registro.split("T")[0], // Formata data
+      data_registro: manutencao.data_registro ? manutencao.data_registro.split("T")[0] : "",
       data_conclusao: manutencao.data_conclusao ? manutencao.data_conclusao.split("T")[0] : "",
       pecas_necessarias: manutencao.pecas_necessarias ? manutencao.pecas_necessarias.join(", ") : "",
       links_pecas: manutencao.links_pecas ? manutencao.links_pecas.join(", ") : "",
@@ -320,13 +237,10 @@ export default function Manutencao() {
     setPage(1);
   }, [debouncedSearchTerm]);
 
-  // --- CORREÇÃO 2: CONTEÚDO DO MODAL "VER DETALHES" ---
   const renderDetalhesDialogContent = (manutencao: Manutencao) => {
-    
-    // Componente auxiliar para não repetir código
     const DetailItem = ({ label, value, children }: { label: string; value?: string | number | null; children?: React.ReactNode }) => {
       const displayValue = value || children;
-      if (!displayValue) return null; // Não mostra o campo se estiver vazio
+      if (!displayValue) return null; 
       return (
         <div>
           <p className="text-xs font-medium text-muted-foreground">{label}</p>
@@ -377,10 +291,10 @@ export default function Manutencao() {
           <Separator />
           <h4 className="font-semibold">Datas e Custos</h4>
           <div className="grid grid-cols-2 gap-4">
-            <DetailItem label="Data do Registro" value={new Date(manutencao.data_registro).toLocaleDateString("pt-BR")} />
-            <DetailItem label="Data de Conclusão" value={manutencao.data_conclusao ? new Date(manutencao.data_conclusao).toLocaleDateString("pt-BR") : "N/A"} />
-            <DetailItem label="Custo Estimado" value={manutencao.custo_estimado ? `R$ ${manutencao.custo_estimado.toFixed(2)}` : "N/A"} />
-            <DetailItem label="Custo Real" value={manutencao.custo_real ? `R$ ${manutencao.custo_real.toFixed(2)}` : "N/A"} />
+            <DetailItem label="Data do Registro" value={formatDate(manutencao.data_registro)} />
+            <DetailItem label="Data de Conclusão" value={manutencao.data_conclusao ? formatDate(manutencao.data_conclusao) : "N/A"} />
+            <DetailItem label="Custo Estimado" value={manutencao.custo_estimado ? formatCurrency(manutencao.custo_estimado) : "N/A"} />
+            <DetailItem label="Custo Real" value={manutencao.custo_real ? formatCurrency(manutencao.custo_real) : "N/A"} />
           </div>
 
           {(manutencao.nf_numero || manutencao.nf_data || manutencao.nf_fornecedor) && (
@@ -389,7 +303,7 @@ export default function Manutencao() {
               <h4 className="font-semibold">Nota Fiscal</h4>
               <div className="grid grid-cols-2 gap-4">
                 <DetailItem label="Nº da NF" value={manutencao.nf_numero} />
-                <DetailItem label="Data da NF" value={manutencao.nf_data ? new Date(manutencao.nf_data).toLocaleDateString("pt-BR") : null} />
+                <DetailItem label="Data da NF" value={manutencao.nf_data ? formatDate(manutencao.nf_data) : null} />
                 <DetailItem label="Fornecedor" value={manutencao.nf_fornecedor} className="col-span-2" />
               </div>
             </>
@@ -401,8 +315,6 @@ export default function Manutencao() {
       </>
     );
   };
-  // --- FIM DA CORREÇÃO 2 ---
-
 
   const renderContent = () => {
     if (isLoadingManutencoes) {
@@ -432,59 +344,61 @@ export default function Manutencao() {
       );
     }
     
-    const listContent = isMobile ? (
-      <div className="space-y-4 p-4">
-        {manutencoes.map((manutencao) => (
-          <ManutencaoCard
-            key={manutencao.id}
-            manutencao={manutencao}
-            onEdit={() => handleEdit(manutencao)}
-            detailsAction={
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="flex-1">
-                    Ver Detalhes
-                  </Button>
-                </DialogTrigger>
-                {/* O conteúdo agora é renderizado pela função */}
-                <DialogContent className="max-w-lg">
-                  {renderDetalhesDialogContent(manutencao)}
-                </DialogContent>
-              </Dialog>
-            }
-            deleteAction={
-              canDelete && (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="sm" className="w-full text-destructive hover:text-destructive">
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Apagar
+    if (isMobile) {
+      return (
+        <div className="space-y-4 p-4">
+          {manutencoes.map((manutencao) => (
+            <ManutencaoCard
+              key={manutencao.id}
+              manutencao={manutencao}
+              onEdit={() => handleEdit(manutencao)}
+              detailsAction={
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="flex-1">
+                      Ver Detalhes
                     </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Tem a certeza?</AlertDialogTitle>
-                      <AlertDialogDescriptionValid>
-                        Esta ação não pode ser revertida. Isto irá apagar
-                        permanentemente o registo de manutenção para
-                        <strong className="px-1">{manutencao.veiculo_nome}</strong>
-                        (Placa: {manutencao.placa}).
-                      </AlertDialogDescriptionValid>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => deletarManutencao(manutencao.id)}>
-                        Continuar
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              )
-            }
-          />
-        ))}
-      </div>
-    ) : (
+                  </DialogTrigger>
+                  <DialogContent className="max-w-lg">
+                    {renderDetalhesDialogContent(manutencao)}
+                  </DialogContent>
+                </Dialog>
+              }
+              deleteAction={
+                canDelete && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="sm" className="w-full text-destructive hover:text-destructive">
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Apagar
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Tem a certeza?</AlertDialogTitle>
+                        <AlertDialogDescriptionValid>
+                          Esta ação não pode ser revertida. O registo de manutenção para
+                          <strong className="px-1">{manutencao.veiculo_nome}</strong>
+                          será apagado permanentemente.
+                        </AlertDialogDescriptionValid>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => deletarManutencao(manutencao.id)}>
+                          Continuar
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )
+              }
+            />
+          ))}
+        </div>
+      );
+    }
+
+    return (
       <Table>
         <TableHeader>
           <TableRow>
@@ -513,13 +427,13 @@ export default function Manutencao() {
                 </Badge>
               </TableCell>
               <TableCell>
-                {new Date(manutencao.data_registro).toLocaleDateString("pt-BR")}
+                {formatDate(manutencao.data_registro)}
               </TableCell>
               <TableCell>
                 {manutencao.custo_real
-                  ? `R$ ${manutencao.custo_real.toFixed(2)}`
+                  ? formatCurrency(manutencao.custo_real)
                   : manutencao.custo_estimado
-                  ? `~R$ ${manutencao.custo_estimado.toFixed(2)}`
+                  ? `~${formatCurrency(manutencao.custo_estimado)}`
                   : "-"}
               </TableCell>
               <TableCell className="text-right">
@@ -530,7 +444,6 @@ export default function Manutencao() {
                         Ver Detalhes
                       </Button>
                     </DialogTrigger>
-                    {/* O conteúdo agora é renderizado pela função */}
                     <DialogContent className="max-w-2xl">
                       {renderDetalhesDialogContent(manutencao)}
                     </DialogContent>
@@ -553,10 +466,7 @@ export default function Manutencao() {
                         <AlertDialogHeader>
                           <AlertDialogTitle>Tem a certeza?</AlertDialogTitle>
                           <AlertDialogDescriptionValid>
-                            Esta ação não pode ser revertida. Isto irá apagar
-                            permanentemente o registo de manutenção para
-                            <strong className="px-1">{manutencao.veiculo_nome}</strong>
-                            (Placa: {manutencao.placa}).
+                            Esta ação não pode ser revertida.
                           </AlertDialogDescriptionValid>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -575,49 +485,7 @@ export default function Manutencao() {
         </TableBody>
       </Table>
     );
-
-    return (
-      <>
-        {listContent}
-        {totalPages > 1 && (
-          <div className="p-4 border-t">
-            <Pagination>
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handlePageChange(page - 1);
-                    }}
-                    aria-disabled={page === 1}
-                    className={page === 1 ? "pointer-events-none opacity-50" : ""}
-                  />
-                </PaginationItem>
-                <PaginationItem>
-                  <PaginationLink href="#" isActive>
-                    Página {page} de {totalPages}
-                  </PaginationLink>
-                </PaginationItem>
-                <PaginationItem>
-                  <PaginationNext
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handlePageChange(page + 1);
-                    }}
-                    aria-disabled={page === totalPages}
-                    className={page === totalPages ? "pointer-events-none opacity-50" : ""}
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          </div>
-        )}
-      </>
-    );
   };
-
 
   return (
     <Layout>
@@ -642,7 +510,6 @@ export default function Manutencao() {
               </Button>
             }
           >
-            {/* --- INÍCIO DA CORREÇÃO 1: FORMULÁRIO PRINCIPAL --- */}
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
                 
@@ -708,12 +575,6 @@ export default function Manutencao() {
                                 ))}
                           </SelectContent>
                         </Select>
-                        {/* Campo oculto para o nome do veículo */}
-                        <FormField
-                          control={form.control}
-                          name="veiculo_nome"
-                          render={({ field }) => <input type="hidden" {...field} />}
-                        />
                         <FormMessage />
                       </FormItem>
                     )}
@@ -950,7 +811,6 @@ export default function Manutencao() {
                 </Button>
               </form>
             </Form>
-            {/* --- FIM DA CORREÇÃO 1 --- */}
           </ResponsiveDialog>
           
         </div>
